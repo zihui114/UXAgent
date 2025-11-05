@@ -30,10 +30,20 @@ class Memory:
         self.read_lock = asyncio.Lock()
         self.write_lock = asyncio.Lock()
 
+        # NEW: track counts
+        self.added_since_last_update: int = 0
+        self.add_count_history: list[int] = []
+
     async def add_memory_piece(self, memory_piece):
         # async with self.update_lock:
         memory_piece.timestamp = self.timestamp
         self.memories.append(memory_piece)
+        # NEW: increment and log
+        self.added_since_last_update += 1
+        logger.debug(
+            f"Memory added (+1). Queued since last update = {self.added_since_last_update}; "
+            f"total pieces = {len(self.memories)}"
+        )
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -51,30 +61,39 @@ class Memory:
             if self.embeddings is not None and len(self.memories) == len(
                 self.embeddings
             ):
+                # nothing new to process
                 return
-            logger.info("updating memory embeds and importance")
+
+            logger.info(
+                "Updating memory: computing embeddings & importance for new pieces"
+            )
 
             async def get_embeddings():
                 # first get memories with no embeddings
-                memory_to_embed = self.memories[
-                    len(self.embeddings) if self.embeddings is not None else 0 :
-                ]
+                start_idx = len(self.embeddings) if self.embeddings is not None else 0
+                memory_to_embed = self.memories[start_idx:]
+                if not memory_to_embed:
+                    return np.array([]), 0
                 inputs = [m.content for m in memory_to_embed]
                 embeds = await embed_text(inputs)
                 embeds = np.array(embeds)
                 for i, m in enumerate(memory_to_embed):
                     m.embedding = embeds[i]
-                return embeds
+                return embeds, len(memory_to_embed)
 
             async def update_importance():
-                # update importance
-                memory_to_update = self.memories[len(self.importance) :]
+                # update importance for new items
+                start_idx = (
+                    len(self.importance)
+                    if isinstance(self.importance, np.ndarray)
+                    else 0
+                )
+                memory_to_update = self.memories[start_idx:]
+                if not memory_to_update:
+                    return np.array([]), 0
                 requests = [
                     [
-                        {
-                            "role": "system",
-                            "content": MEMORY_IMPORTANCE_PROMPT,
-                        },
+                        {"role": "system", "content": MEMORY_IMPORTANCE_PROMPT},
                         {
                             "role": "user",
                             "content": json.dumps(
@@ -92,31 +111,46 @@ class Memory:
                     for m in memory_to_update
                 ]
                 responses = await asyncio.gather(
-                    *[
-                        async_chat(
-                            r, response_format={"type": "json_object"}, log=False
-                        )
-                        for r in requests
-                    ]
+                    *[async_chat(r, json_mode=True, log=False) for r in requests]
                 )
                 new_importance = [json.loads(r)["score"] for r in responses]
                 new_importance = np.array(new_importance) / 10
                 for i, m in enumerate(memory_to_update):
                     m.importance = new_importance[i]
-                return new_importance
+                return new_importance, len(memory_to_update)
 
-            embeds, new_importance = await asyncio.gather(
+            (embeds, n_embeds), (new_importance, n_imps) = await asyncio.gather(
                 get_embeddings(), update_importance()
             )
+
             async with self.read_lock:
+                # merge embeddings
                 if self.embeddings.size == 0:
                     self.embeddings = embeds
-                else:
+                elif embeds.size > 0:
                     self.embeddings = np.concatenate([self.embeddings, embeds])
-                if self.importance is None:
+
+                # merge importance
+                if (
+                    not isinstance(self.importance, np.ndarray)
+                    or self.importance.size == 0
+                ):
                     self.importance = new_importance
-                else:
+                elif new_importance.size > 0:
                     self.importance = np.concatenate([self.importance, new_importance])
+
+            # NEW: summary logging and bookkeeping
+            processed = max(n_embeds, n_imps)
+            self.add_count_history.append(processed)
+            logger.info(
+                f"Updated memory: +{processed} new piece(s) this cycle "
+                f"(embeddings: +{n_embeds}, importance: +{n_imps}). "
+                f"Totals — pieces={len(self.memories)}, "
+                f"embedded={self.embeddings.shape[0] if self.embeddings.size else 0}, "
+                f"with_importance={self.importance.shape[0] if isinstance(self.importance, np.ndarray) else 0}"
+            )
+            # reset the counter now that we've processed the batch
+            self.added_since_last_update = 0
 
     async def retrieve(
         self,
@@ -168,7 +202,7 @@ class Memory:
                     context.api_call_manager.get().retrieve_result.append(results)
                 return results
 
-            query_embedding = (await embed_text([query], type="search_query"))[0]
+            query_embedding = (await embed_text([query]))[0]
             similarities = np.dot(self.embeddings, query_embedding)
             recencies = np.array([m.timestamp - self.timestamp for m in self.memories])
             recencies = np.exp(recencies)
@@ -205,13 +239,12 @@ class MemoryPiece(ABC):
         # self.memory.add_memory_piece(self)
 
     def __json__(self):
-        return json.dumps(
-            {
-                "kind": self.kind,
-                "content": self.content,
-                "timestamp": self.timestamp,
-            }
-        )
+        return {
+            "kind": self.kind,
+            "content": self.content,
+            "timestamp": self.timestamp,
+            "importance": self.importance,
+        }
 
 
 class Observation(MemoryPiece):
@@ -245,6 +278,4 @@ class Action(MemoryPiece):
 
 class Thought(MemoryPiece):
     def __init__(self, content, memory):
-        super().__init__(content, memory)
-        super().__init__(content, memory)
         super().__init__(content, memory)

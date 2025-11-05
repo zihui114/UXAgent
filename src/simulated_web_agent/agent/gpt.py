@@ -2,29 +2,153 @@ import asyncio
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, cast
 
-import aioboto3
-import boto3
-import openai
-from openai.types import CreateEmbeddingResponse
-from openai.types.chat import ChatCompletion
-import botocore
+# anthropic import for claude computer use
+import anthropic
+import yaml
+from anthropic.types.beta import (
+    BetaContentBlockParam,
+    BetaTextBlock,
+    BetaTextBlockParam,
+    BetaToolUseBlockParam,
+)
+
+# client and model for claude compute use tool
+from dotenv import load_dotenv
+
+# from litellm import drop_params, token_counter
+from litellm.router import Router
+
 from . import context
 
-# client = openai.Client()
-async_client = None
-# client = None
-client = None
-# async_client = None
-# embedding_model = "text-embedding-3-small"
-embedding_model = "cohere.embed-english-v3"
-# chat_model = "gpt-4o-mini"
+provider = "openai"  # "openai" or "aws" or "anthropic"
+
 prompt_dir = Path(__file__).parent.absolute() / "shop_prompts"
 
-provider = ""
+chat_router = Router(
+    model_list=[
+        {
+            "model_name": "openai",
+            "litellm_params": {
+                "model": "openai/gpt-5-mini",
+                "reasoning_effort": "minimal",
+            },
+        },
+        {
+            "model_name": "aws",
+            "litellm_params": {
+                "model": "bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0",
+                "thinking": {
+                    "type": "disabled",
+                },
+            },
+        },
+        {
+            "model_name": "anthropic",
+            "litellm_params": {
+                "model": "claude-sonnet-4-20250514",
+            },
+        },
+        {
+            "model_name": "openai_thinking",
+            "litellm_params": {
+                "model": "openai/gpt-5-mini",
+                "reasoning_effort": "high",
+            },
+        },
+        {
+            "model_name": "aws_thinking",
+            "litellm_params": {
+                "model": "bedrock/global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+                "thinking": {
+                    "type": "enabled",
+                    "budget_tokens": 32000,
+                },
+            },
+        },
+        {
+            "model_name": "anthropic_thinking",
+            "litellm_params": {
+                "model": "claude-sonnet-4-20250514",
+                "thinking": {
+                    "type": "enabled",
+                    "budget_tokens": 32000,
+                },
+            },
+        },
+    ]
+)
 
-session = aioboto3.Session()
+slow_chat_router = Router(
+    model_list=[
+        {
+            "model_name": "openai",
+            "litellm_params": {"model": "openai/gpt-5", "reasoning_effort": "minimal"},
+        },
+        {
+            "model_name": "aws",
+            "litellm_params": {
+                "model": "bedrock/global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+                "thinking": {
+                    "type": "disabled",
+                },
+            },
+        },
+        {
+            "model_name": "anthropic",
+            "litellm_params": {
+                "model": "claude-sonnet-4-20250514",
+            },
+        },
+        {
+            "model_name": "openai_thinking",
+            "litellm_params": {"model": "openai/gpt-5", "reasoning_effort": "high"},
+        },
+        {
+            "model_name": "aws_thinking",
+            "litellm_params": {
+                "model": "bedrock/global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+                "thinking": {
+                    "type": "enabled",
+                    "budget_tokens": 32000,
+                },
+            },
+        },
+        {
+            "model_name": "anthropic_thinking",
+            "litellm_params": {
+                "model": "claude-sonnet-4-20250514",
+                "thinking": {
+                    "type": "enabled",
+                    "budget_tokens": 32000,
+                },
+            },
+        },
+    ]
+)
+
+embed_router = Router(
+    model_list=[
+        {
+            "model_name": "openai",
+            "litellm_params": {"model": "openai/text-embedding-3-small"},
+        },
+        {
+            "model_name": "aws",
+            "litellm_params": {
+                "model": "bedrock/cohere.embed-english-v3",
+                "input_type": "search_document",
+                "truncate": "END",
+            },
+        },
+    ]
+)
+
+
+load_dotenv()  # load anthropic api key from .env
+anthropic_client = anthropic.Anthropic()
+anthropic_model = "claude-sonnet-4-20250514"
 
 
 def async_retry(times=10):
@@ -32,16 +156,19 @@ def async_retry(times=10):
         async def wrapper(*args, **kwargs):
             wait = 1
             max_wait = 5
+            last_exc = None
             for _ in range(times):
                 # noinspection PyBroadException
                 try:
                     return await f(*args, **kwargs)
                 except Exception as exc:
+                    last_exc = exc
                     print("got exc", exc)
                     await asyncio.sleep(wait)
                     wait = min(wait * 2, max_wait)
                     pass
-            raise exc
+            if last_exc:
+                raise last_exc
 
         return wrapper
 
@@ -53,98 +180,24 @@ def retry(times=10):
         def wrapper(*args, **kwargs):
             wait = 1
             max_wait = 5
-            exc = None
+            last_exc = None
             for _ in range(times):
                 # noinspection PyBroadException
                 try:
                     return f(*args, **kwargs)
-                except Exception as exc1:
-                    exc = exc1
+                except Exception as exc:
                     print("got exc", exc)
+                    last_exc = exc
                     # await asyncio.sleep(wait)
                     time.sleep(wait)
                     wait = min(wait * 2, max_wait)
                     pass
-            raise exc
+            if last_exc:
+                raise last_exc
 
         return wrapper
 
     return func_wrapper
-
-
-@async_retry()
-async def embed_text_bedrock(
-    texts: list[str], model=embedding_model, type="search_document", **kwargs
-) -> list[list[float]]:
-    async with session.client("bedrock-runtime", region_name="us-east-1") as client:
-        response = await client.invoke_model(
-            modelId=model,
-            body=json.dumps(
-                {
-                    "texts": texts,
-                    "input_type": type,
-                    "truncate": "END",
-                }
-            ),
-        )
-        result = json.loads(await response["body"].read())
-        return result["embeddings"]
-
-
-@async_retry()
-async def async_chat_bedrock(
-    messages: list[dict[str, str]],
-    model,
-    log=True,
-    json_mode=False,
-    **kwargs,
-) -> ChatCompletion:
-    async with session.client("bedrock-runtime", region_name="us-east-1") as client:
-        if context.api_call_manager.get() and log:
-            context.api_call_manager.get().request.append(messages)
-        system_message = messages[0]["content"]
-        messages = messages[1:]
-        new_messages = []
-        for message in messages:
-            new_messages.append(
-                {
-                    "role": message["role"],
-                    "content": [
-                        {
-                            # 'type': 'text',
-                            "text": message["content"]
-                        }
-                    ],
-                }
-            )
-        messages = new_messages
-        response = await client.converse(
-            modelId=model,
-            **{
-                "inferenceConfig": {
-                    "maxTokens": 1000,
-                },
-                "messages": messages,
-                "system": [{"text": system_message}],
-            },
-        )
-        content = response["output"]["message"]["content"][0]["text"]
-        if context.api_call_manager.get() and log:
-            context.api_call_manager.get().response.append(content)
-
-        if json_mode:
-            # Extract JSON substring from the content
-            try:
-                json_str = _extract_json_string(content)
-                json_obj = json.loads(json_str)
-                return json_str
-            except Exception as e:
-                print(e)
-                print(content)
-                print(json_str)
-                raise Exception("Invalid JSON in response") from e
-        else:
-            return content
 
 
 def _extract_json_string(text: str) -> str:
@@ -159,175 +212,200 @@ def _extract_json_string(text: str) -> str:
         raise Exception("No JSON object found in the response")
 
 
-@retry()
-def chat_bedrock(messages: list[dict[str, str]], model, **kwargs) -> str:
-    client = boto3.client(service_name="bedrock-runtime", region_name="us-east-1")
-    system_message = messages[0]["content"]
-    messages = messages[1:]
-    response = client.invoke_model(
-        modelId=model,
-        body=json.dumps(
-            {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 5000,
-                "system": system_message,
-                "messages": messages,
-            }
-        ),
+@async_retry()
+async def async_chat(
+    messages,
+    model="small",
+    json_mode=False,
+    log=True,
+    max_tokens=64000,
+    enable_thinking=None,
+    **kwargs,
+):
+    """
+    Async chat completion that returns the string LLM output.
+
+    For model and provider information, check the head of /src/simulated_web_agent/agent/gpt.py.
+
+    To add your own preferred LLM for chat completion, simply add the model into each of the liteLLM routers,
+    and change the provider global variable to your custom provider.
+
+    Args:
+        model: "small" for lightweight version of the model
+        json_mode: whether the result should be in json deserializable
+        log: whether to log the output
+        max_tokens: the maximum number of tokens
+        enable_thinking: whether to enable thinking, if supported (supported by bedrock and anthropic, not supported by openai)
+
+    Returns:
+        A single string object outputted by the LLM.
+    """
+
+    if context.api_call_manager.get() and log:
+        context.api_call_manager.get().request.append(messages)
+
+    router = chat_router if model == "small" else slow_chat_router
+    call_kwargs: Dict[str, Any] = dict(**kwargs)
+    if enable_thinking:
+        router_model = provider + "_thinking"
+    else:
+        router_model = provider
+    if json_mode and provider == "openai":
+        call_kwargs["response_format"] = {"type": "json_object"}
+    response = await router.acompletion(
+        model=router_model,
+        messages=messages,
+        max_tokens=max_tokens,
+        drop_params=True,  # do not forward unused params, such as thinking for openai
+        **call_kwargs,
+        tools=None,
     )
-    result = json.loads(response["body"].read())
-    return result["content"][0]["text"]
+    content = response.choices[0].message.get("content", "")
+
+    finish_reason = response.choices[0].finish_reason
+    if finish_reason != "stop":
+        print("finish_reason:", finish_reason)
+        print("content:", content)
+        print("response:", response)
+    # tokens_used = token_counter(model="openai/gpt-5-mini", text=content)
+    # print("Output tokens:", tokens_used)
+
+    if context.api_call_manager.get() and log:
+        context.api_call_manager.get().response.append(content)
+
+    if json_mode:
+        # Extract JSON substring from the content
+        try:
+            json_str = _extract_json_string(content)
+            _ = json.loads(json_str)
+            return json_str
+        except Exception as e:
+            print(e)
+            print(content)
+            raise Exception("Invalid JSON in response") from e
+    return content
 
 
-async def embed_text_openai(texts, model=embedding_model, **kwargs):
+@retry()
+def chat(
+    messages, model="small", enable_thinking=None, json_mode=False, **kwargs
+) -> str:
+    """
+    Returns LLM text completion given list of formatted messages.
+
+    Args:
+        model: set to "small" to use the lightweight version of the chat model.
+        messages: List of previous messages
+        enable_thinking: Whether to enable thinking or not. Pass in an integer for custom thinking budget.
+        json_mode: Whether to enable JSON mode or not.
+
+    Returns:
+        String output of the LLM model
+    """
+
+    router = chat_router if model == "small" else slow_chat_router
+    call_kwargs: Dict[str, Any] = dict(**kwargs)
+    if enable_thinking:
+        call_kwargs["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": enable_thinking
+            if isinstance(enable_thinking, int)
+            else 1024,
+        }
+    if json_mode and provider == "openai":
+        call_kwargs["response_format"] = {"type": "json_object"}
+
     try:
-        global async_client
-        if async_client is None:
-            async_client = openai.AsyncClient()
-        del kwargs["type"]
-        embeds = await async_client.embeddings.create(
-            input=texts, model=model, **kwargs
+        response = router.completion(
+            model=provider,
+            messages=messages,
+            drop_params=True,  # do not forward unused params, such as thinking for openai
+            **call_kwargs,
         )
-        return [e.embedding for e in embeds.data]
-    except Exception as e:
-        print(texts)
-        print(e)
-        raise e
-
-
-def chat_openai(messages, model, json_mode=False, **kwargs) -> ChatCompletion:
-    try:
-        global client
-        if client is None:
-            client = openai.Client()
-
-        for message in messages:
-            new_contents = []
-            if isinstance(message["content"], str):
-                new_contents.append(
-                    {
-                        "type": "text",
-                        "text": message["content"],
-                    }
-                )
-            elif isinstance(message["content"], list):
-                for content in message["content"]:
-                    if isinstance(content, dict):
-                        if content["type"] == "image":
-                            new_content = {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{content['source']['media_type']};base64,"
-                                    + content["source"]["data"]
-                                },
-                            }
-                            new_contents.append(new_content)
-                        else:
-                            new_contents.append(content)
-            message["content"] = new_contents
-        if json_mode:
-            kwargs["response_format"] = {"type": "json_object"}
-        return (
-            client.chat.completions.create(model=model, messages=messages, **kwargs)
-            .choices[0]
-            .message.content
-        )
+        return response.choices[0].message["content"]
     except Exception as e:
         print(messages)
         print(e)
         raise e
 
 
-async def async_chat_openai(
-    messages, model, log=True, json_mode=False, **kwargs
-) -> ChatCompletion:
+async def embed_text(texts: list[str]) -> list[list[float]]:
+    """
+    Embed a list of texts using the provider configured in /src/simulated_web_agent/agent/gpt.py
+
+    Returns:
+        List of list[float] representing each of the embedded texts
+    """
     try:
-        global async_client
-        if async_client is None:
-            async_client = openai.AsyncClient()
-        for message in messages:
-            new_contents = []
-            if isinstance(message["content"], str):
-                new_contents.append(
-                    {
-                        "type": "text",
-                        "text": message["content"],
-                    }
-                )
-            elif isinstance(message["content"], list):
-                for content in message["content"]:
-                    if isinstance(content, dict):
-                        if content["type"] == "image":
-                            new_content = {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{content['source']['media_type']};base64,"
-                                    + content["source"]["data"]
-                                },
-                            }
-                            new_contents.append(new_content)
-                        else:
-                            new_contents.append(content)
-            message["content"] = new_contents
-        if context.api_call_manager.get() and log:
-            context.api_call_manager.get().request.append(messages)
-        if json_mode:
-            kwargs["response_format"] = {"type": "json_object"}
-        response = await async_client.chat.completions.create(
-            model=model, messages=messages, **kwargs
-        )
-        if context.api_call_manager.get() and log:
-            context.api_call_manager.get().response.append(
-                response.choices[0].message.content
-            )
-        return response.choices[0].message.content
+        response = await embed_router.aembedding(model=provider, input=texts)
+        return [e["embedding"] for e in response.data]
     except Exception as e:
-        # print(messages)
+        print(texts)
         print(e)
         raise e
 
 
-async def async_chat(*args, model="small", **kwargs):
-    if model == "small":
-        model = {
-            "openai": "gpt-4o-mini",
-            "aws": "us.anthropic.claude-3-5-haiku-20241022-v1:0",
-        }[provider]
-    else:
-        model = {
-            "openai": "gpt-4o",
-            "aws": "anthropic.claude-3-5-sonnet-20240620-v1:0",
-        }[provider]
+def chat_anthropic_computer_use(
+    messages,
+    system: BetaTextBlockParam,
+    model=anthropic_model,
+    screen_width: int = 1024,
+    screen_height: int = 768,
+) -> (list[BetaToolUseBlockParam], list[Dict, Any]):
+    """
+    Given a system block and JSON messages, return the tool use block generated by the computer use tool
+    """
+    response = anthropic_client.beta.messages.create(
+        model=model,
+        max_tokens=1024,
+        tools=[
+            {
+                "type": "computer_20250124",
+                "name": "computer",
+                "display_width_px": screen_width,
+                "display_height_px": screen_height,
+                "display_number": 1,
+            },
+            {
+                "name": "web_browser",
+                "description": "High-level browser controls",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": [
+                                "switch_tab",
+                                "forward",
+                                "back",
+                                "new_tab",
+                                "goto_url",
+                                "close_tab",
+                                "terminate",
+                            ],
+                        },
+                        "tab_index": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Zero-based index for switch_tab and close_tab",
+                        },
+                        "url": {
+                            "type": "string",
+                            "description": "URL input, only required for goto_url and new_tab",
+                        },
+                    },
+                    "required": ["action"],
+                },
+            },
+        ],
+        system=[system],
+        messages=messages,
+        betas=["computer-use-2025-01-24"],
+    )
 
-    if provider == "openai":
-        return await async_chat_openai(*args, model=model, **kwargs)
-    else:
-        return await async_chat_bedrock(*args, model=model, **kwargs)
-
-
-def chat(*args, model="small", **kwargs):
-    if model == "small":
-        model = {
-            "openai": "gpt-4o-mini",
-            "aws": "us.anthropic.claude-3-5-haiku-20241022-v1:0",
-        }[provider]
-    else:
-        model = {
-            "openai": "gpt-4o",
-            "aws": "anthropic.claude-3-5-sonnet-20240620-v1:0",
-        }[provider]
-    if provider == "openai":
-        return chat_openai(*args, model=model, **kwargs)
-    else:
-        return chat_bedrock(*args, model=model, **kwargs)
-
-
-async def embed_text(*args, **kwargs):
-    if provider == "openai":
-        return await embed_text_openai(*args, **kwargs)
-    else:
-        return await embed_text_bedrock(*args, **kwargs)
+    return response
 
 
 def load_prompt(prompt_name):
-    return (prompt_dir / f"{prompt_name}.txt").read_text()
+    p = prompt_dir / f"{prompt_name}.txt"
+    return open(p, "r", encoding="utf-8").read()

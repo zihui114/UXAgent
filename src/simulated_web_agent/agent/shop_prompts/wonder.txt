@@ -10,7 +10,7 @@ You should output the 0 to 3 thoughts.
 
 Output a series of random thoughts as they would naturally occur in a human mind.
 
-Format your output as a JSON object, follows:
+Format your output as follows JSON:
 
 {
     "thoughts": [

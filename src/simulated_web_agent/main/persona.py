@@ -1,213 +1,211 @@
 import asyncio
-import json
+import logging
+import pathlib
 import random
 import re
-from pathlib import Path
+from typing import Any, Awaitable, Callable, Optional
 
-import click
-import yaml
-from tqdm.contrib.concurrent import thread_map  # or thread_map
+from hydra import compose, initialize, initialize_config_dir
+from omegaconf import DictConfig
 
-from ..agent.gpt import chat_bedrock as chat
-from .batch import make_sync
+from ..agent import gpt
 
-
-def parse_range(range_str):
-    """Parse a range string like '18-24' and return a tuple (18, 24)."""
-    match = re.match(r"(\d+)[\s]*-[\s]*(\d+)", range_str)
-    if match:
-        return int(match.group(1)), int(match.group(2))
-    else:
-        raise ValueError(f"Invalid range format: '{range_str}'")
+logger = logging.getLogger(__name__)
 
 
-def prepare_cumulative_distribution(ratio_dict):
-    """Prepare cumulative distribution for sampling."""
+# --- utils -------------------------------------------------------------------
+def parse_range(range_str: str) -> tuple[int, int]:
+    m = re.match(r"(\d+)\s*-\s*(\d+)", range_str)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    raise ValueError(f"Invalid range format: '{range_str}'")
+
+
+def prepare_cumulative_distribution(ratio_dict: dict[str, float]):
     items = list(ratio_dict.items())
     total_ratio = sum(ratio_dict.values())
-    cumulative = []
-    cumulative_prob = 0
+    cumulative, acc = [], 0.0
     for k, v in items:
-        cumulative_prob += v / total_ratio
-        cumulative.append((cumulative_prob, k))
+        acc += v / total_ratio
+        cumulative.append((acc, k))
+
     return cumulative
 
 
 def sample_from_cumulative(cumulative):
-    """Sample a key based on the cumulative distribution."""
     r = random.random()
     for prob, k in cumulative:
         if r <= prob:
             return k
-    return cumulative[-1][1]  # In case of rounding errors
+    return cumulative[-1][1]  # rounding safety
 
 
-@click.command()
-@click.option(
-    "--config-file",
-    type=str,
-    required=True,
-    help="Path to the YAML configuration file containing parameters.",
-)
-@make_sync
-async def main(config_file: str):
-    # Load configuration from YAML file
-    with open(config_file, "r") as f:
-        config = yaml.safe_load(f)
+def _prepare_demographics_cumulative(demographics: list[dict[str, Any]]):
+    prepped: list[tuple[str, list[tuple[float, str]]]] = []
+    for dim in demographics:
+        name = dim.get("name")
+        choices = dim.get("choices", [])
+        # normalize probabilities
+        total = sum(float(c.get("weight", 0.0)) for c in choices) or 1.0
+        acc = 0.0
+        cumulative: list[tuple[float, str]] = []
+        for c in choices:
+            p = float(c.get("weight", 0.0)) / total
+            acc += p
+            cumulative.append((acc, str(c.get("name"))))
+        if cumulative:
+            prepped.append((str(name), cumulative))
 
-    output_dir = Path(config["output_dir"])
-    json_output_dir = output_dir / "json"
-    human_readable_output_dir = output_dir / "prettified"
+    return prepped
 
-    json_output_dir.mkdir(parents=True, exist_ok=True)
-    human_readable_output_dir.mkdir(parents=True, exist_ok=True)
 
-    total_personas = config.get("total_personas", 20)
+# helper of loading config file. Needed for the example persona if not provided
+def _load_cfg(config_name: str = "base"):
+    here = pathlib.Path(__file__).resolve().parent
+    conf_dir = here.parents[2] / "conf"
+    with initialize_config_dir(version_base=None, config_dir=str(conf_dir)):
+        cfg = compose(config_name=config_name)
+    return cfg
 
-    # Read queries from file
-    queries_file = config["queries_file"]
-    with open(queries_file, "r") as f:
-        base_queries = [line.strip() for line in f if line.strip()]
 
-    if not base_queries:
-        print("The queries file is empty. Please provide at least one query.")
-        return
+async def _generate_one(
+    demographics_cum: list[tuple[str, list[tuple[float, str]]]],
+    general_intent: str,
+    example_persona: str,
+    previous_personas: list[str],
+    chat_fn: Callable[..., Awaitable[str]] = gpt.async_chat,
+    rng_seed: int | None = None,
+    sem: asyncio.Semaphore | None = None,
+):
+    r = random.Random(rng_seed) if rng_seed is not None else random.Random()
+    # sample values for each demographic dimension
+    sampled: dict[str, str] = {}
+    for attr_name, cum in demographics_cum:
+        choice = sample_from_cumulative(cum)
+        sampled[attr_name] = str(choice)
 
-    # Load demographic distributions from config
-    age_groups = config["age_groups"]
-    genders = config["genders"]
-    income_groups = config["income_groups"]
+    # for diversity: pick some previous personas as examples
+    # and ensure the generated persona deviates from those
+    if previous_personas:
+        num_examples = min(len(previous_personas), 3)
+        examples = random.sample(previous_personas, num_examples)
+        example_text = "\n\n".join(examples)
+    else:
+        example_text = example_persona
 
-    # pretty print the config
-    for key in ["age_groups", "genders", "income_groups"]:
-        print(f"distribution for {key}:")
-        for k, v in config[key].items():
-            print(f"  {k}: {v:.1f}%")
-        print("-----------------")
+    persona_msg = [
+        {
+            "role": "system",
+            "content": f"""You are a helpful assistant that generates diverse personas.
+                        Examples:
+                        {example_text}
+                        """,
+        },
+        {
+            "role": "user",
+            "content": (
+                "Generate a persona using the above examples. The persona should be different from previous personas to ensure diversity.\n"
+                + "The persona should:\n"
+                + "\n".join([f"- have the {k} of {v}" for k, v in sampled.items()])
+                + "\nProvide the persona in the same format as the examples."
+                + "\nOnly output the persona, no other text."
+            ),
+        },
+    ]
 
-    # Prepare cumulative distributions for sampling
-    age_cumulative = prepare_cumulative_distribution(age_groups)
-    gender_cumulative = prepare_cumulative_distribution(genders)
-    income_cumulative = prepare_cumulative_distribution(income_groups)
+    # intent_msg = lambda persona: [
+    #     {
+    #         "role": "system",
+    #         "content": "You output only a single, specific, actionable intent, no extra text.",
+    #     },
+    #     {
+    #         "role": "user",
+    #         "content": (
+    #             f"The persona is:\n{persona}\n\n"
+    #             f"Based on the general intent '{general_intent}', output ONE concrete, executable intention "
+    #             f"this persona would take (e.g., buy/compare/book/choose), with enough detail to act on a website."
+    #         ),
+    #     },
+    # ]
 
-    previous_personas = []  # List to store previous personas
+    async def call_chat(messages):
+        if sem is None:
+            return (await chat_fn(messages=messages)).strip()
+        async with sem:
+            return (await chat_fn(messages=messages)).strip()
 
-    def generate_one(i):
-        # Sample age group, then parse age range from group key
-        age_group = sample_from_cumulative(age_cumulative)
-        age_range = parse_range(age_group)
-        age = random.randint(*age_range)
+    persona = await call_chat(persona_msg)
+    # intent = await call_chat(intent_msg(persona))
 
-        # Sample gender
-        gender = sample_from_cumulative(gender_cumulative)
+    # add this generated persona to the example pool
+    previous_personas.append(persona)
 
-        # Sample income group, parse income range
-        income_group = sample_from_cumulative(income_cumulative)
-        income_range = parse_range(income_group)
+    return {"persona": persona, "intent": general_intent, **sampled}
 
-        # Prepare examples
-        if previous_personas:
-            # Randomly select one or more previous personas as examples
-            num_examples = min(len(previous_personas), 3)
-            examples = random.sample(previous_personas, num_examples)
-            example_text = "\n\n".join(examples)
-        else:
-            # Use initial seed persona as example
-            example_text = config["example_persona"]
 
-        # Generate persona
-        persona_response = chat(
-            messages=[
-                {
-                    "role": "system",
-                    "content": f"""You are a helpful assistant that generates diverse personas.
-Examples:
-{example_text}
-""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Generate a persona using the above examples. The persona should be different from previous personas to ensure diversity. The persona should:
+async def generate_personas(
+    demographics: list[dict[str, Any]],
+    general_intent: str,
+    n: int = 1,
+    chat_fn: Callable[..., Awaitable[str]] = gpt.async_chat,
+    max_concurrency: int = 8,
+    rng_seed: int | None = None,
+    on_progress: Optional[Callable[[int, int], None]] = None,
+    example_text: Optional[str] = None,
+) -> list[dict[str, str]]:
+    """
+    Concurrent persona generation using asyncio and async_chat.
+    """
+    demographics_cum = _prepare_demographics_cumulative(demographics)
 
-- Have the age of {age}
-- Be {gender}
-- Have an income between ${income_range[0]} and ${income_range[1]}
+    sem = asyncio.Semaphore(max_concurrency) if max_concurrency else None
 
-Provide the persona in the same format as the examples.
+    # base example, default to the one in config if not provided
+    cfg = _load_cfg()
+    base_example = cfg.example_persona
+    gpt.provider = cfg.llm_provider
 
-Only output the persona, no other text.
-""",
-                },
-            ]
+    if example_text and example_text != "":
+        logger.info("Using custom persona example: " + example_text[:100] + "...")
+        base_example = example_text
+    else:
+        logger.info(
+            "No custom persona example provided. Using the default example to start..."
         )
 
-        persona = persona_response.strip()
+    # store generated personas to use as example, ensuring diversity
+    previous_personas = []
 
-        previous_personas.append(persona)  # Add current persona to list
-
-        # Select a random base query from the queries file
-        base_query = random.choice(base_queries)
-
-        # Generate intent
-        intent_response = chat(
-            messages=[
-                {
-                    "role": "system",
-                    "content": f"""You are a helpful assistant that generates specific intents for a persona. The persona is:
-
-{persona}
-
-""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Generate a specified intent for the persona, based on a search query. The search query is "{base_query}". The intent should always be to buy something. Examples of specific intents:
-
-Input:
-jacket columbia
-
-Output:
-buy a red, medium-sized woman's jacket from Columbia.
-
-Only output the specific intent, no other text.
-The output intent should be executable on a shopping website.
-""",
-                },
-            ]
+    # Wrap each task with its index so we can restore order later.
+    async def _one_indexed(idx: int, seed_i: int | None):
+        res = await _generate_one(
+            demographics_cum,
+            general_intent,
+            base_example,
+            previous_personas,
+            chat_fn,
+            seed_i,
+            sem,
         )
+        return idx, res
 
-        intent = intent_response.strip()
+    tasks = []
+    for i in range(n):
+        seed_i = (rng_seed + i) if rng_seed is not None else None
+        tasks.append(asyncio.create_task(_one_indexed(i, seed_i)))
 
-        # Save JSON
-        with (json_output_dir / f"virtual customer {i}.json").open("w") as f_json:
-            json.dump(
-                {
-                    "persona": persona,
-                    "intent": intent,
-                    "age": age,
-                    "age_group": age_group,
-                    "gender": gender,
-                    "income": income_range,
-                    "income_group": income_group,
-                },
-                f_json,
-                indent=4,
-            )
+    results: list[dict[str, str]] = [None] * n  # type: ignore
+    done = 0
 
-        # Save human-readable format
-        with (human_readable_output_dir / f"virtual customer {i}.txt").open(
-            "w"
-        ) as f_txt:
-            f_txt.write(persona + "\n")
-            f_txt.write("\nIntent:\n")
-            f_txt.write(intent + "\n")
+    # As each task finishes, record its result and ping progress.
+    for fut in asyncio.as_completed(tasks):
+        idx, res = await fut
+        results[idx] = res
+        done += 1
+        if on_progress:
+            try:
+                on_progress(done, n)
+            except Exception:
+                pass  # progress should never crash the job
 
-    thread_map(
-        generate_one, range(total_personas), total=total_personas, max_workers=50
-    )
-
-    print(f"\nPersonas have been generated and saved to {output_dir}.")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    return results

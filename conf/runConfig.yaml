@@ -1,0 +1,99 @@
+# Config for testing main run() function. Will be the same data passed by the POST method
+
+total_personas: 20
+concurrency: 10
+
+demographics:
+  - name: "Age"
+    choices:
+      - { name: "18-55", weight: 1 }
+  - name: "Gender"
+    choices:
+      - { name: "male", weight: 1 }
+      - { name: "female", weight: 1 }
+      - { name: "non-binary", weight: 1 }
+  - name: "Online Shopping Frequency"
+    choices:
+      - { name: "A few times per year", weight: 1 }
+      - { name: "A few times per month", weight: 1 }
+      - { name: "A few times per week", weight: 1 }
+
+general_intent: Buy the highest rated product from the meat substitute category within a budget between 100 and 200. You don't need to finish the purchase, just go to the checkout page.
+example_persona: |
+  Background:
+  He is a male between the ages of 35 and 44. He has a high school diploma or GED and lives in Folsom, New Jersey, with his family. He works as a full-time employee and earns an annual household income between $75,000 and $99,999. He is a full-time professional in the tech industry who enjoys cooking and reading in his free time. He is curious about artificial intelligence, believes it can be helpful for humanity, and is excited to see how it develops over the next decade.
+  Financial Situation:
+  He earns a steady income that allows him and his family to live comfortably. He is mindful of his spending and balances daily expenses with future financial stability.
+  Shopping Habits:
+  He shops online once every couple of weeks and typically spends around $50 a month. As an Amazon Prime member, he values fast delivery and reliable service. He is extremely confident when buying monitors, chairs, outfits, and jackets. He strongly agrees that he researches carefully before purchasing, values high-quality products, and seeks the best value for money. He is loyal to brands he likes, but is also open to trying new ones occasionally. He is less influenced by online ads and does not shop quickly or impulsively.
+  Professional Life:
+  He works full-time in the tech industry, focusing on work tasks during the day and staying productive. He maintains discipline in his career while balancing time for personal interests and family life.
+  Personal Style:
+  He enjoys a balanced lifestyle that includes cooking, working out, and reading in the evenings to unwind. His routine typically begins in the late morning with work, followed by exercise, and ends with relaxation.
+
+start_url: http://52.91.223.130:7770/
+
+max_steps: 50
+
+questionnaire:
+  questionnaire_id: web_shopping_usability_v1
+  title: System Usability Survey
+  questions:
+    - id: q1
+      type: multiple_choice
+      prompt: "I think that I would like to use this system frequently. (1 = Strongly disagree, 5 = Strongly agree)"
+      options: ["1", "2", "3", "4", "5"]
+
+    - id: q2
+      type: multiple_choice
+      prompt: "I found the system unnecessarily complex. (1 = Strongly disagree, 5 = Strongly agree)"
+      options: ["1", "2", "3", "4", "5"]
+
+    - id: q3
+      type: multiple_choice
+      prompt: "I thought the system was easy to use. (1 = Strongly disagree, 5 = Strongly agree)"
+      options: ["1", "2", "3", "4", "5"]
+
+    - id: q4
+      type: multiple_choice
+      prompt: "I think that I would need the support of a technical person to be able to use this system. (1 = Strongly disagree, 5 = Strongly agree)"
+      options: ["1", "2", "3", "4", "5"]
+
+    - id: q5
+      type: multiple_choice
+      prompt: "I found the various functions in this system were well integrated. (1 = Strongly disagree, 5 = Strongly agree)"
+      options: ["1", "2", "3", "4", "5"]
+
+    - id: q6
+      type: multiple_choice
+      prompt: "I thought there was too much inconsistency in this system. (1 = Strongly disagree, 5 = Strongly agree)"
+      options: ["1", "2", "3", "4", "5"]
+
+    - id: q7
+      type: multiple_choice
+      prompt: "I would imagine that most people would learn to use this system very quickly. (1 = Strongly disagree, 5 = Strongly agree)"
+      options: ["1", "2", "3", "4", "5"]
+
+    - id: q8
+      type: multiple_choice
+      prompt: "I found the system very cumbersome to use. (1 = Strongly disagree, 5 = Strongly agree)"
+      options: ["1", "2", "3", "4", "5"]
+
+    - id: q9
+      type: multiple_choice
+      prompt: "I felt very confident using the system. (1 = Strongly disagree, 5 = Strongly agree)"
+      options: ["1", "2", "3", "4", "5"]
+
+    - id: q10
+      type: multiple_choice
+      prompt: "I needed to learn a lot of things before I could get going with this system. (1 = Strongly disagree, 5 = Strongly agree)"
+      options: ["1", "2", "3", "4", "5"]
+
+    - id: q11
+      type: multiple_choice
+      prompt: "To what extent do you agree that the left-side filter function helps you narrow your search and find your desired product? (1 = Strongly disagree, 5 = Strongly agree)"
+      options: ["1", "2", "3", "4", "5"]
+
+    - id: q12
+      type: short_text
+      prompt: "Please explain your answer. What aspects of the filter function were helpful or unhelpful in your experience?"

@@ -1,8 +1,8 @@
-<h1 align="center"> [CHI'25 LBW Accepted] UXAgent: An LLM Agent-Based Usability Testing Framework for Web Design </h1>
+<h1 align="center"> UXAgent: A System for Simulating Usability Testing of Web Design with LLM </h1>
 
 <p align="center">
-    <a href="https://arxiv.org/abs/2502.12561">
-        <img src="https://img.shields.io/badge/arXiv-2502.12561-B31B1B.svg?style=plastic&logo=arxiv" alt="arXiv">
+    <a href="https://arxiv.org/abs/2504.09407">
+        <img src="https://img.shields.io/badge/arXiv-2504.09407-B31B1B.svg?style=plastic&logo=arxiv" alt="arXiv">
     </a>
     <a href="https://opensource.org/licenses/MIT">
         <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=plastic" alt="License: MIT">
@@ -26,8 +26,6 @@ Yuxuan Lu, Bingsheng Yao, Hansu Gu, Jing Huang, Jessie Wang, Laurence Li, Haiyan
 
 The system leverages dual-system reasoning for quick decisions and in-depth analysis, and its **Universal Web Connector** ensures compatibility with any web page. By offering real-time feedback, UXAgent streamlines the design process and improves testing efficiency.
 
-[![Button Click]][Link] 
-
 <p align="center">
     <a href="https://uxagent.hailab.io/"> 
         <img src="https://img.shields.io/badge/Live_Demo-37a779?style=for-the-badge">
@@ -37,7 +35,6 @@ The system leverages dual-system reasoning for quick decisions and in-depth anal
     </a>
 </p>
 
-https://github.com/user-attachments/assets/0c5d22a8-4438-402b-8e6c-2151bdf53bf1
 
 
 ---
@@ -46,52 +43,27 @@ https://github.com/user-attachments/assets/0c5d22a8-4438-402b-8e6c-2151bdf53bf1
 
 1. **Clone the repository:**
    ```bash
-   git clone git@github.com:xxx/xxx.git
+   git clone git@github.com:neuhai/UXAgent.git
    ```
 
-2. **Set up the environment:**
+2. install uv, follow [this guide](https://docs.astral.sh/uv/getting-started/installation/)
+
+3. **Set up the environment:**
    ```bash
-   conda env create -f environment.yml -n simulated_web_agent
-   conda activate simulated_web_agent
+   uv sync
    ```
 
-3. **Install the package:**
+4. **Install Chromium for Playwright:**
    ```bash
-   cd simulated_web_agent
-   pip install -e .
-   ```
-
-4. **Install Chrome & Chromedriver:**
-   - Download Chrome and the corresponding [chromedriver](https://googlechromelabs.github.io/chrome-for-testing/#stable).
-   - Configure the chromedriver (example commands for Linux and macOS below).
-
-   **Linux:**
-   ```bash
-   wget https://storage.googleapis.com/chrome-for-testing-public/131.0.6778.85/linux64/chromedriver-linux64.zip
-   unzip chromedriver-linux64.zip
-   sudo mv chromedriver /usr/bin/chromedriver
-   sudo chmod +x /usr/bin/chromedriver
-   ```
-
-   **macOS:**
-   ```bash
-   brew install chromedriver
-   xattr -d com.apple.quarantine /opt/homebrew/bin/chromedriver
-   ```
-
-   **Verify Installation:**
-   ```bash
-   chromedriver --version
+   uv run playwright install chromium
    ```
 
 5. **Set API keys:**
-   Our UXAgent system supports AWS Claude and OpenAI. You only need to set one of them.
-   - For AWS Claude:
-      - https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html
    ```bash
-   export AWS_ACCESS_KEY_ID=xxx123
-   export AWS_SECRET_ACCESS_KEY=xxx123
-   export OPENAI_API_KEY=sk-123
+   # export AWS_ACCESS_KEY_ID=xxx123
+   # export AWS_SECRET_ACCESS_KEY=xxx123
+   # export OPENAI_API_KEY=sk-123
+   export ANTHROPIC_API_KEY=sk-ant-123
    ```
 
 6. **Optional: Enable "headful" mode:**
@@ -104,98 +76,123 @@ https://github.com/user-attachments/assets/0c5d22a8-4438-402b-8e6c-2151bdf53bf1
 
 ## Quick Start
 
-1. **Run the Agent:**
-   We provide 1,000 generated persona in `example_data`. Use the following command to test with a persona and save the output:
+### Running a single agent from the command line
+
+```bash
+uv run -m src.simulated_web_agent.main --intent "Buy a Jacket from Amazon" --start-url "https://www.amazon.com" --max-steps 20 --wait-for-login
+```
+
+For more options, see the help message:
+
+```bash
+uv run -m src.simulated_web_agent.main --help
+```
+
+### Running multiple agents (batch mode) from the command line
+
+```bash
+uv run -m src.simulated_web_agent.main.run
+```
+`runConfig.yaml` defines how **multiple simulated agents** are launched and what behavior or survey the agents performs during a batch run. Refer to this following table for how to use the fields in `runConfig.yaml`.
+
+| Field               | Description                                                                                                                                                            |
+|---------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **total_personas**  | The total number of virtual agents (personas) to spawn during the batch run. Each persona represents one simulated user.                                               |
+| **concurrency**     | The number of agents to run in parallel (e.g., `10` for up to 10 simultaneous browser sessions).                                                                       |
+| **demographics**    | Defines sampling categories (e.g., age, gender, shopping frequency) and their relative weights. Each persona randomly samples from these weighted options.             |
+| **general_intent**  | A shot, plain-English instruction describing the overall shopping or web browsing goal for all agents.                                                                 |
+| **example_persona** | A template persona profile (background, finances, habits, etc.) used to generate diverse personas. All generated personas will follow the same formate as the example. |
+| **start_url**       | The base URL where each agent begins the simulated session.                                                                                                            |
+| **max_steps**       | The maximum number of actions (clicks, navigations, form fills, etc.) an agent may perform before stopping.                                                            |
+| **questionnaire**   | A post-run usability survey shown to each agent, defined with metadata (`id`, `title`) and a list of questions (with type, prompt, and options).                       |
+
+Example `runConfig.yaml` you can get started with:
+
+```yaml
+# Number of personas and concurrency
+total_personas: 20
+concurrency: 10
+
+# Demographic sampling (weighted random)
+demographics:
+  - name: "Age"
+    choices:
+      - { name: "18-55", weight: 1 }
+  - name: "Gender"
+    choices:
+      - { name: "male", weight: 1 }
+      - { name: "female", weight: 1 }
+      - { name: "non-binary", weight: 1 }
+  - name: "Online Shopping Frequency"
+    choices:
+      - { name: "A few times per year", weight: 1 }
+      - { name: "A few times per month", weight: 1 }
+      - { name: "A few times per week", weight: 1 }
+
+# The general shopping intent for all agents
+general_intent: Buy the highest rated product from the meat substitute category within a budget between 100 and 200. You don't need to finish the purchase, just go to the checkout page.
+
+# Example persona template for generation reference
+example_persona: |
+  Background:
+    Male, age 35-44, tech professional, lives in New Jersey.
+  Financial Situation:
+    Stable income, careful with expenses.
+  Shopping Habits:
+    Shops online twice a month, prefers Amazon Prime, brand-loyal but open-minded.
+  Professional Life:
+    Works full-time in tech; balanced lifestyle with family time and hobbies.
+
+# Starting point for the browser agent
+start_url: http://52.91.223.130:7770/
+
+# Maximum allowed agent actions
+max_steps: 50
+
+# Post-run questionnaire definition
+questionnaire:
+  questionnaire_id: web_shopping_usability_v1
+  title: System Usability Survey
+  questions:
+    - id: q1
+      type: multiple_choice
+      prompt: "I think that I would like to use this system frequently. (1 = Strongly disagree, 5 = Strongly agree)"
+      options: ["1", "2", "3", "4", "5"]
+```
+
+### Using the quick experiment setup UI for multiple agents mode
+
+In addition to configuring batch runs through `runConfig.yaml`, you can also use the **web-based quick experiment setup UI** to launch and manage multiple agents visually.
+This interface allows you to adjust parameters such as total personas, concurrency, and intent directly from the browser without manually editing YAML files.
+
+1. Have **flask** and **Node.js / npm** installed
+2. From the project root:
    ```bash
-   python3 -m simulated_web_agent.main --persona "example_data/personas/json/virtual customer 0.json" --output "output"  --llm-provider openai
+   uv run -m src.simulated_web_agent.main.app
    ```
-
-2. **Example Persona Format:**
-   ```json
-   {
-       "persona": "Persona: Michael ...",
-       "intent": "buy a large, inflatable spider decoration for halloween",
-       "age": 42,
-       "gender": "male",
-       "income": [30001, 94000]
-   }
-   ```
-3. **Example Persona:**
-   ```
-   Persona: Michael
-
-   Background:
-   Michael is a mid-career professional working as a marketing manager at a technology startup in San Francisco. He is passionate about using data-driven strategies to drive growth and innovation for the company.
-
-   Demographics:
-   Age: 42
-   Gender: Male
-   Education: Bachelor's degree in Business Administration
-   Profession: Marketing Manager
-   Income: $75,000
-
-   Financial Situation:
-   Michael has a comfortable income that allows him to maintain a decent standard of living in the expensive San Francisco Bay Area. He is financially responsible, saving a portion of his earnings for retirement and emergencies, while also enjoying occasional leisure activities and travel.
-
-   Shopping Habits:
-   Michael prefers to shop online for convenience, but he also enjoys the occasional trip to the mall or specialty stores to browse for new products. He tends to research items thoroughly before making a purchase, looking for quality, functionality, and value. Michael values efficiency and is not influenced by trends or impulse buys.
-
-   Professional Life:
-   As a marketing manager, Michael is responsible for developing and implementing marketing strategies to promote the startup's products and services. He collaborates closely with the product, sales, and design teams to ensure a cohesive brand experience. Michael is always looking for ways to optimize marketing campaigns and stay ahead of industry trends.
-
-   Personal Style:
-   Michael has a casual, yet professional style. He often wears button-down shirts, chinos, and leather shoes to the office. On weekends, he enjoys wearing comfortable, sporty attire for outdoor activities like hiking or cycling. Michael tends to gravitate towards neutral colors and classic, versatile pieces that can be mixed and matched.
-
-   Intent:
-   buy a large, inflatable spider decoration for halloween
-
-   ```
----
-
-## Generating Personas
-
-Use the `persona.py` script to generate virtual customer personas based on configurations.
-
-1. **Example Config (`config.yml`):**
-   ```yaml
-   output_dir: "output"
-   queries_file: "queries.txt"
-   total_personas: 200
-
-   age_groups:
-     "18-24": 40
-     "25-34": 30
-     "35-44": 20
-     "45-54": 10
-   ```
-
-2. **Example Queries (`queries.txt`):**
-   ```
-   jacket columbia
-   smartphone samsung
-   laptop apple
-   ```
-
-3. **Run the script:**
+3. Boot up the interface
    ```bash
-   python -m simulated_web_agent.main.persona --config-file config.yml
+   cd experiment_ui
+   npm install
+   npm run dev
    ```
+4. You can configure your multi-agent run through the experiment configuration wizard in the interface. (set participant demographics, modify task, edit survey, etc.)
+Click "Confirm and Run" in the UI to start the custom configured multi-agent run.
 
-Generated personas will be saved in the specified `output_dir` as `.json` and `.txt` files.
+## Results & Data Artifacts
+After running a simulation with UXAgent, you’ll find a structured output folder `runs/<timestamp>` containing logs, session traces, screenshots, and aggregate metrics.
 
 ---
-
 ## License
 This project is licensed under the [MIT License](https://opensource.org/licenses/MIT).
 
+
 ## Citation
 ```bibtex
-@misc{lu2025uxagent,
-    title={UXAgent: An LLM Agent-Based Usability Testing Framework for Web Design},
-    author={Yuxuan Lu and Bingsheng Yao and Hansu Gu and Jing Huang and Jessie Wang and Laurence Li and Jiri Gesi and Qi He and Toby Jia-Jun Li and Dakuo Wang},
-    year={2025},
-    eprint={2502.12561},
-    archivePrefix={arXiv},
-    primaryClass={cs.HC}
+@article{lu2025uxagent,
+  title={UXAgent: A System for Simulating Usability Testing of Web Design with LLM Agents},
+  author={Lu, Yuxuan and Yao, Bingsheng and Gu, Hansu and Huang, Jing and Wang, Jessie and Li, Yang and Gesi, Jiri and He, Qi and Li, Toby Jia-Jun and Wang, Dakuo},
+  journal={arXiv preprint arXiv:2504.09407},
+  year={2025}
 }
 ```

@@ -1,0 +1,138 @@
+# Configuration for UXAgent.
+# Override any setting from the command line:
+#   python -m src.simulated_web_agent.main environment.browser.headless=true environment.proxy.enabled=false
+
+# ============================================================================
+# ENVIRONMENT CONFIGURATION
+# ============================================================================
+# Web environment including browser, proxy, and script paths
+environment:
+  # Recording configuration
+  recording:
+    enabled: false                     # Enable screen recording using QuickRecorder
+
+  # Site configurations - mapping of site names to their hostnames
+  # These hostnames will be rewritten to actual IP addresses by the proxy
+  sites:
+    shopping: "https://www.amazon.com/"
+
+  init_script_path: "src/simulated_web_agent/executor/parser/initscript.js"   # Path to JavaScript init script
+  parser_script_path: "src/simulated_web_agent/executor/parser/parser.js"     # Path to JavaScript parser script
+
+  # Browser configuration
+  # Maps directly to Playwright's launch and context options
+  # Add any Playwright option by following their API structure:
+  # https://playwright.dev/python/docs/api/class-browsertype#browser-type-launch
+  # https://playwright.dev/python/docs/api/class-browser#browser-new-context
+  browser:
+    # Launch options
+    launch_options:
+      headless: ${oc.decode:${oc.env:HEADLESS,true}}  # default = true
+      args:                           # Performance optimization args
+        - "--disable-autofill-keyboard-accessory-view"
+        - "--disable-autofill-profile-update"
+        - "--disable-autofill"
+        - "--disable-extensions"
+        - "--disable-background-networking"
+        - "--safebrowsing-disable-auto-update"
+        - "--disable-component-update"
+        - "--disable-default-apps"
+        - "--no-first-run"
+        - "--no-default-browser-check"
+        - "--metrics-recording-only"
+        - "--disable-sync"
+        - "--disable-translate"
+        - "--disable-client-side-phishing-detection"
+        - "--disable-domain-reliability"
+        - "--disable-crash-reporter"
+
+    # Context options
+    context_options:
+      viewport:
+        width: 1024                    # Browser viewport width in pixels
+        height: 768                   # Browser viewport height in pixels
+      device_scale_factor: 1
+      user_agent: null                 # User agent string to use
+      extra_http_headers: null         # Will be set for host rewrites if needed
+      bypass_csp: true
+
+    # Browser cache and data directories
+    cache_dir: "./browser_cache"       # Persistent network cache directory
+    user_data_dir: "./browser_session" # User data directory (cookies, session data)
+
+    # Timeout configurations (in milliseconds)
+    timeouts:
+      default: 10000        # Timeout for locator actions (click, type, etc.)
+      page_load_domcontent: 10000 # Timeout for DOM content loaded
+      page_load_networkidle: 3000 # Timeout for network idle (longer for full page loads)
+      element_wait: 2000          # Timeout for waiting for specific elements
+      custom_network_idle: 3000    # Time to wait for no network activity before considering idle
+      container_health_check: 3000 # Timeout for container health checks (in milliseconds)
+
+    # Sleep configuration (in seconds)
+    sleep_after_action: 2      # Sleep time after each action (helps with page stability)
+
+  # Browser tracing for debugging and analysis
+  tracing:
+    enabled: false                           # Enable Playwright tracing
+    output_path: "trace.zip"                  # File path for trace output
+    screenshots: true                        # Include screenshots in traces
+    snapshots: true                          # Include DOM snapshots in traces
+    sources: true                            # Include source code in traces
+
+# ============================================================================
+# SURVEY CONFIGURATION
+# ============================================================================
+survey:
+  questionnaire: src/simulated_web_agent/surveys/questionnaire.json
+  memory_dir: src/simulated_web_agent/surveys/memory_trace
+  out_dir: src/simulated_web_agent/surveys/out
+
+# ============================================================================
+# LLM CONFIGURATION
+# ============================================================================
+# Large Language Model provider settings
+llm_provider: "aws"     # Provider: "openai" or "aws" or "anthropic"
+
+# ============================================================================
+# GENERAL SETTINGS
+# ============================================================================
+debug: false           # Enable debug logging and detailed output
+log_level: DEBUG        # Logging level: DEBUG, INFO, WARNING, ERROR
+
+# ============================================================================
+# HYDRA SETTINGS
+# ============================================================================
+# Controls output directory and job behavior
+hydra:
+  run:
+    dir: ./outputs/${now:%Y-%m-%d_%H-%M-%S}  # Timestamped output directory
+  job:
+    chdir: false       # Don't change working directory during execution
+
+
+example_persona: |
+  Persona: Clara
+  Background:
+  Clara is a PhD student in Computer Science at a prestigious university. She is deeply engaged in research focusing on artificial intelligence and machine learning, aiming to contribute to advancements in technology that can benefit society.
+
+  Demographics:
+
+  Age: 28
+  Gender: Female
+  Education: Pursuing a PhD in Computer Science
+  Profession: PhD student
+  Income: $50,000
+
+  Financial Situation:
+  Clara lives on her stipend as a PhD student and is careful with her spending. She prefers to save money for research-related expenses and invest in her academic pursuits.
+
+  Shopping Habits:
+  Clara dislikes shopping and avoids spending much time browsing through products. She prefers straightforward, efficient shopping experiences and often shops online for convenience. When she does shop, she looks for practicality and affordability over style or trendiness.
+  So Clara wants to shop QUICKLY and EFFICIENTLY.
+
+  Professional Life:
+  Clara spends most of her time in academia, attending conferences, working in the lab, and writing papers. Her commitment to her research is her main priority, and she manages her time around her academic responsibilities.
+
+  Personal Style:
+  Clara prefers comfortable, functional clothing, often choosing items that are easy to wear for long hours spent at her desk or in the lab. She wears medium-sized clothing and likes colors that reflect her personality—mostly red, which she finds uplifting and energizing.

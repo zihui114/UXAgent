@@ -5,17 +5,14 @@ import logging
 import time
 from typing import Optional, Union
 
-from . import context
-from .gpt import async_chat
-from .gpt import load_prompt
-from tqdm.asyncio import tqdm
+from . import context, gpt
+from .gpt import async_chat, load_prompt
 from .memory import Action, Memory, MemoryPiece, Observation, Plan, Reflection, Thought
 
 PERCEIVE_PROMPT = load_prompt("perceive")
 REFLECT_PROMPT = load_prompt("reflect")
 WONDER_PROMPT = load_prompt("wonder")
 PLANNING_PROMPT = load_prompt("planning")
-EVALUATE_PLAN_PROMPT = load_prompt("evaluate_plan")
 ACTION_PROMPT = load_prompt("action")
 FEEDBACK_PROMPT = load_prompt("feedback")
 logger = logging.getLogger(__name__)
@@ -36,7 +33,10 @@ class LogApiCall:
     def __exit__(self, exc_type, exc_value, traceback):
         context.api_call_manager.set(None)
         with open(
-            context.run_path.get() / f"api_trace_{Agent.api_call_count}.json", "w"
+            context.run_path.get()
+            / "api_trace"
+            / f"api_trace_{Agent.api_call_count}.json",
+            "w",
         ) as f:
             json.dump(
                 {
@@ -48,6 +48,7 @@ class LogApiCall:
                 },
                 f,
             )
+        logger.info(f"API Call time: {time.time() - self.start_time}")
 
 
 class Agent:
@@ -56,6 +57,8 @@ class Agent:
     current_plan: Optional[Plan]
     last_reflect_index = 0
     api_call_count = 0
+    observation: Optional[Observation] = None
+    deny_list = ["Crime", "crime", "Security", "security"]
 
     def __init__(self, persona, intent):
         self.memory = Memory(self)
@@ -64,38 +67,24 @@ class Agent:
         self.current_plan = None
 
     async def perceive(self, environment):
-        # environment = json.dumps(environment)
-        pages = environment["page"].split("<split-marker></split-marker>")
-        envs = [
-            {
-                **environment,
-                "page": p,
-            }
-            for p in pages
-        ]
-        envs = [json.dumps(e) for e in envs]
-        logger.info("agent perceiving environment ...")
-        observasions = []
-        with LogApiCall():
-            requests = [
-                [
-                    {"role": "system", "content": PERCEIVE_PROMPT},
-                    {"role": "user", "content": e},
-                ]
-                for e in envs
-            ]
-            results = await tqdm.gather(
-                *[async_chat(r, json_mode=True) for r in requests]
-            )
-            # logger.info("Perceived: %s", observasions)
-            # observasions = json.loads(observasions)
-            for r in results:
-                # logger.info("Perceived: %s", r)
-                observasions += json.loads(r)["observations"]
+        environment_full = json.dumps(environment)
 
-        # observasions = observasions["observations"]
-        for o in observasions:
-            await self.memory.add_memory_piece(Observation(o, self.memory, environment))
+        for denied_word in self.deny_list:
+            environment_full = environment_full.replace(denied_word, "***")
+        # print(environment_full)
+        logger.info("agent perceiving environment...")
+        with LogApiCall():
+            request = [
+                {"role": "system", "content": PERCEIVE_PROMPT},
+                {"role": "user", "content": environment_full},
+            ]
+            result = await async_chat(request, json_mode=True, max_tokens=64000)
+            result = json.loads(result)
+            print(result)
+            self.observation = result["observations"][0]
+            await self.memory.add_memory_piece(
+                Observation(result["observations"][0], self.memory, environment)
+            )
 
     @staticmethod
     def format_memories(memories: list[MemoryPiece], sort_by_kind=True) -> list[str]:
@@ -165,14 +154,68 @@ class Agent:
                 {"role": "system", "content": REFLECT_PROMPT},
                 {"role": "user", "content": json.dumps(model_input)},
             ],
-            json_mode=True,
             log=False,
+            json_mode=True,
+            model="large",
         )
         reflections = json.loads(reflections)["insights"]
         logger.info("reflections: %s", reflections)
         for r in reflections:
             await self.memory.add_memory_piece(Reflection(r, self.memory))
         # todo
+
+        # logger.info(
+        #     f"reflecting on {questions}",
+        # )
+        # reflections = []
+        # answers = []
+        # requests = [
+        #     [
+        #         {
+        #             "role": "system",
+        #             "content": REFLECT_ANSWER_PROMPT,
+        #         },
+        #         {
+        #             "role": "user",
+        #             "content": json.dumps(
+        #                 {
+        #                     "question": q,
+        #                     "memories": self.format_memories(
+        #                         await self.memory.retrieve(q)
+        #                     ),
+        #                 }
+        #             ),
+        #         },
+        #     ]
+        #     for q in questions
+        # ]
+        # results = await asyncio.gather(
+        #     *[
+        #         async_chat(
+        #             r,
+        #             response_format={"type": "json_object"},
+        #         )
+        #         for r in requests
+        #     ]
+        # )
+        # for answer in results:
+        #     answer = json.loads(answer)
+        #     if answer["answer"] != "N/A":
+        #         answers.append(answer)
+        # try:
+        #     for answer in answers:
+        #         reflections.append(
+        #             Reflection(
+        #                 answer["answer"],
+        #                 self.memory,
+        #                 [memories[i] for i in answer["target"]],
+        #             )
+        #         )
+        # except IndexError as e:
+        #     logger.error("Reflection failed: %s", e)
+        #     await self.memory.add_memory_piece(
+        #         Thought("Reflection failed", self.memory)
+        #     )
 
     async def wonder(self):
         logger.info("wondering ...")
@@ -193,8 +236,9 @@ class Agent:
                     ),
                 },
             ],
-            json_mode=True,
             log=False,
+            json_mode=True,
+            model="large",
         )
         resp = json.loads(resp)
         logger.info("wondering: %s", resp)
@@ -207,6 +251,9 @@ class Agent:
             memories = await self.memory.retrieve(
                 self.intent,
                 include_recent_observation=True,
+                include_recent_action=True,
+                include_recent_plan=True,
+                include_recent_thought=True,
                 trigger_update=False,
                 kind_weight={"action": 10, "plan": 10, "thought": 10, "reflection": 10},
             )
@@ -236,6 +283,7 @@ class Agent:
                         },
                     ],
                     json_mode=True,
+                    # enable_thinking=True,
                     model="large",
                 )
                 # # print(resp)
@@ -258,6 +306,7 @@ class Agent:
         logger.info("next_step: %s", next_step)
         self.current_plan = Plan(new_plan, self.memory, next_step)
         await self.memory.add_memory_piece(Thought(rationale, self.memory))
+        await self.memory.add_memory_piece(self.current_plan)
 
     async def act(self, env):
         with LogApiCall():
@@ -268,6 +317,9 @@ class Agent:
             )
             memories = self.format_memories(memories)
             assert self.current_plan is not None
+            clickables = [e for e in env["clickable_elements"] if e is not None]
+            inputs = [e for e in env["clickable_elements"] if e is not None]
+            selects = [e for e in env["clickable_elements"] if e is not None]
             action = await async_chat(
                 [
                     {"role": "system", "content": ACTION_PROMPT},
@@ -275,18 +327,23 @@ class Agent:
                         "role": "user",
                         "content": json.dumps(
                             {
+                                "valid_targets": {
+                                    "inputs": inputs,
+                                    "clickable": clickables,
+                                    "selects": selects,
+                                },
                                 "persona": self.persona,
                                 "intent": self.intent,
                                 "plan": self.current_plan.content,
                                 "next_step": self.current_plan.next_step,
-                                "environment": env,
+                                "environment": env["html"],
                                 "recent_memories": memories,
                             }
                         ),
                     },
                 ],
+                # model="anthropic.claude-3-5-sonnet-20240620-v1:0",
                 json_mode=True,
-                model="large",
             )
         actions = json.loads(action)
         logger.info("actions: %s", actions)
@@ -295,7 +352,12 @@ class Agent:
                 Action(action["description"], self.memory, json.dumps(action))
             )
 
-        return actions["actions"]
+        return actions["actions"][0]
 
     async def add_thought(self, thought):
+        await self.memory.add_memory_piece(Thought(thought, self.memory))
+        await self.memory.add_memory_piece(Thought(thought, self.memory))
+        await self.memory.add_memory_piece(Thought(thought, self.memory))
+        await self.memory.add_memory_piece(Thought(thought, self.memory))
+        await self.memory.add_memory_piece(Thought(thought, self.memory))
         await self.memory.add_memory_piece(Thought(thought, self.memory))

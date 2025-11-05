@@ -1,212 +1,112 @@
 import asyncio
-import base64
-import functools
-import json
 import logging
-import os
-import signal
-import subprocess
-import time
-import traceback
+from pathlib import Path
 
 import click
-import gymnasium as gym
-import requests
-import selenium
 from dotenv import load_dotenv
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
+from hydra import compose, initialize, initialize_config_dir
+from omegaconf import DictConfig
 
-from ..agent.gpt import chat
 from ..agent import gpt
-from ..executor import amazon_recipes, google_flights_recipes, onestopshop_recipes
-from ..executor.env import (
-    Browser,  # noqa
-    SeleniumEnv,  # noqa
-)
-from .model import AgentPolicy, HumanPolicy, OpenAIPolicy  # noqa  # noqa
+from ..executor.env import WebAgentEnv  # Playwright env
+from .experiment import _run_for_persona_and_intent
+from .model import AgentPolicy  # noqa
 
 
-def make_sync(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        return asyncio.run(func(*args, **kwargs))
-
-    return wrapper
-
-
-def solve_captcha(browser: Browser):
-    try:
-        while True:
-            image = browser.driver.find_element(
-                By.CSS_SELECTOR,
-                "body > div > div.a-row.a-spacing-double-large > div.a-section > div > div > form > div.a-row.a-spacing-large > div > div > div.a-row.a-text-center > img",
-            ).get_attribute("src")
-            image_file = requests.get(image).content
-            image_file = base64.b64encode(image_file).decode("utf-8")
-            resp = chat(
-                [
-                    {
-                        "role": "system",
-                        "content": 'You are an OCR expert designed to solve CAPTCHAs. You will respond in a single JSON format: {"text": "The text in the image"}. DO NOT include any other text. E.g. {"text": "123456"}',
-                    },
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "image/jpeg",
-                                    "data": image_file,
-                                },
-                            },
-                            {"type": "text", "text": "What’s in this image?"},
-                        ],
-                    },
-                ],
-                model="large",
-                json_mode=True,
-            )
-            print(resp)
-            text = json.loads(resp)["text"]
-            input_element = browser.driver.find_element(
-                By.CSS_SELECTOR, "#captchacharacters"
-            )
-            # input_element.send_keys(text)
-            # input_element.send_keys(Keys.ENTER)
-            for keys in text:
-                input_element.send_keys(keys)
-                time.sleep(0.2)
-            input_element.send_keys(Keys.ENTER)
-            time.sleep(1)
-    except selenium.common.exceptions.NoSuchElementException:
-        # no more captcha
-        pass
-    return
-
-
-recording_process = None
-
-
-def start_recording(output_video: str):
-    # screencapture -D 1 -v output.mp4
-    # start the background process
-    global recording_process
-    recording_process = subprocess.Popen(
-        ["screencapture", "-D", "2", "-v", output_video],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    return recording_process
-
-
-def stop_recording(result=None):
-    # process.terminate()
-    # send Ctrl-C=
-    time.sleep(3)
-    global recording_process
-    recording_process.send_signal(signal.SIGINT)
+def _load_cfg():
+    here = Path(__file__).resolve().parent
+    conf_dir = here.parents[2] / "conf"
+    with initialize_config_dir(version_base=None, config_dir=str(conf_dir)):
+        cfg = compose(config_name="base")
+    return cfg
 
 
 @click.command()
-@click.option("--persona", type=str, help="Path to the persona file.", required=True)
-@click.option("--output", type=str, help="Path to the output file.", required=True)
-@click.option("--max-steps", type=int, help="Maximum steps to run.", default=50)
-@click.option("--cookie", type=(str, str), help="Cookies to set.")
 @click.option(
-    "--record",
-    is_flag=True,
-    show_default=True,
+    "--record/--no-record",
     default=False,
-    type=bool,
-    help="Record the run.",
+    show_default=True,
+    help="Enable or disable session recording.",
 )
-@click.option("--llm-provider", type=click.Choice(["openai", "aws"]), default="aws")
-@make_sync
-async def main(
-    persona: str,
-    output: str,
-    max_steps: int,
-    cookie: tuple[str, str],
+@click.option(
+    "--headless/--headed",
+    default=False,
+    show_default=True,
+    help="Run browser in headless or headed mode.",
+)
+@click.option(
+    "--persona",
+    default="Persona: Clara\nBackground:\nClara is a PhD student in Computer Science at a prestigious university. She is deeply engaged in research focusing on artificial intelligence and machine learning, aiming to contribute to advancements in technology that can benefit society.\n\nDemographics:\n\nAge: 28\nGender: Female\nEducation: Pursuing a PhD in Computer Science\nProfession: PhD student\nIncome: $50,000\n\nFinancial Situation:\nClara lives on her stipend as a PhD student and is careful with her spending. She prefers to save money for research-related expenses and invest in her academic pursuits.\n\nShopping Habits:\nClara dislikes shopping and avoids spending much time browsing through products. She prefers straightforward, efficient shopping experiences and often shops online for convenience. When she does shop, she looks for practicality and affordability over style or trendiness.\nSo Clara wants to shop QUICKLY and EFFICIENTLY.\n\nProfessional Life:\nClara spends most of her time in academia, attending conferences, working in the lab, and writing papers. Her commitment to her research is her main priority, and she manages her time around her academic responsibilities.\n\nPersonal Style:\nClara prefers comfortable, functional clothing, often choosing items that are easy to wear for long hours spent at her desk or in the lab. She wears medium-sized clothing and likes colors that reflect her personality\u2014mostly red, which she finds uplifting and energizing.",
+    show_default=False,
+    help="Persona description string.",
+)
+@click.option(
+    "--intent",
+    default="Use amazon's Rufus feature to purchase a gaming mouse",
+    show_default=False,
+    help="User intent for the agent.",
+)
+@click.option(
+    "--start-url",
+    default="http://www.amazon.com",
+    show_default=True,
+    help="Starting URL for the session.",
+)
+@click.option(
+    "--max-steps",
+    default=20,
+    show_default=True,
+    type=int,
+    help="Maximum number of agent steps.",
+)
+@click.option(
+    "--wait-for-login/--no-wait-for-login",
+    default=False,
+    show_default=True,
+    help="Wait for login to complete before starting the session.",
+)
+@click.option(
+    "--use-user-data-dir/--no-use-user-data-dir",
+    default=False,
+    show_default=True,
+    help="User data directory for the browser.",
+)
+def main(
     record: bool,
-    llm_provider: str,
-):
-    load_dotenv()
-    logging.basicConfig()
-    loggers = [
-        logging.getLogger(name)
-        for name in logging.root.manager.loggerDict
-        if name.startswith("simulated_web_agent")
-    ]
-    for logger in loggers:
-        logger.setLevel(logging.INFO)
-    gpt.provider = llm_provider
-    persona_info = json.load(open(persona))
-    persona = persona_info["persona"]
-    intent = persona_info["intent"]
-    policy = AgentPolicy(persona, intent, output)
+    headless: bool,
+    persona: str,
+    intent: str,
+    start_url: str,
+    max_steps: int,
+    wait_for_login: bool,
+    use_user_data_dir: bool,
+) -> None:
+    """
+    Run the simulated web agent using Click-based CLI options.
+    """
+    logging.basicConfig(level=logging.INFO)
+    logging.getLogger("LiteLLM").setLevel(logging.WARNING)
+    logging.getLogger("LiteLLM Router").setLevel(logging.WARNING)
+    cfg = _load_cfg()
+    cfg.environment.recording.enabled = record
+    cfg.environment.browser.launch_options.headless = headless
+    gpt.provider = cfg.llm_provider
+    # config.browser.user_data_dir
+    if not use_user_data_dir:
+        cfg.environment.browser.user_data_dir = None
 
-    if record:
-        env = gym.make(
-            "SeleniumEnv-v0",
-            start_url="https://www.amazon.com",
-            # start_url="https://www.google.com/flights",
-            headless=os.environ.get("HEADLESS", "true").lower() == "true",
-            # recipes=google_flights_recipes.recipes,
-            recipes=amazon_recipes.recipes,
-            start_callback=lambda x: (
-                solve_captcha(x),
-                start_recording(f"{output}/recording.mp4"),
-            ),
-            end_callback=lambda x: stop_recording,
+    asyncio.run(
+        _run_for_persona_and_intent(
+            cfg=cfg,
+            persona_info={
+                "persona": persona,
+                "intent": intent,
+            },
+            start_url=start_url,
+            max_steps=max_steps,
+            wait_for_login=wait_for_login,
         )
-    else:
-        env = gym.make(
-            "SeleniumEnv-v0",
-            start_url="https://www.amazon.com",
-            # start_url="https://www.google.com/flights",
-            headless=os.environ.get("HEADLESS", "true").lower() == "true",
-            # recipes=google_flights_recipes.recipes,
-            recipes=amazon_recipes.recipes,
-            start_callback=solve_captcha,
-            end_callback=lambda x: print("end with ", x),
-        )
-    num_steps = 0
-    observation, info = env.reset()
-
-    try:
-        if cookie:
-            # save cookie
-            with open(f"{output}/cookies.json", "w") as f:
-                json.dump(cookie, f)
-            env.browser.driver.add_cookie({"name": cookie[0], "value": cookie[1]})
-
-        while True:
-            if not observation["error_message"]:
-                del observation["error_message"]
-            # print(observation["page"])
-            clickables = observation["clickables"]
-            # print("clickables:", clickables)
-            action = await policy.forward(observation, clickables)
-            print(f"Taking action {action}")
-            observation, reward, terminated, truncated, info = env.step(action)
-            print("-" * 50)
-            if terminated:
-                break
-            num_steps += 1
-            if num_steps >= max_steps:
-                print(f"Reached max steps of {max_steps}, stopping.")
-                (policy.run_path / "failed.json").write_text("reached max steps")
-                break
-    except Exception:
-        print(traceback.format_exc())
-
-        (policy.run_path / "error.txt").write_text(traceback.format_exc())
-    finally:
-        await policy.close()
-        env.close()
+    )
 
 
 if __name__ == "__main__":

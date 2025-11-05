@@ -10,9 +10,9 @@ Examples of insights:
 2. The product "Woman Fur Casual Vests Female Autumn Spring Fur Collar Waistcoat Ladies Sleeveless Fake Fur Coats Vest Jackets - xingse,S" is not what I want.
 3. The product "Woman Fur Casual Vests Female Autumn Spring Fur Collar Waistcoat Ladies Sleeveless Fake Fur Coats Vest Jackets - xingse,S"'s review looks good to me.
 4. I want to buy a product that has a high rating.
-5. The department refinement shown in the search result page isn't working as expected. I don't like this website's design.
+5. The products recommended by Rufus is too expensive for me.
 
-Your output should be a list of insights formatted as a JSON object follows:
+Your output should be a JSON list of insights formatted as follows:
 
 {
     "insights": [
