@@ -318,8 +318,8 @@ class Agent:
             memories = self.format_memories(memories)
             assert self.current_plan is not None
             clickables = [e for e in env["clickable_elements"] if e is not None]
-            inputs = [e["id"] for e in env.get("input_elements", []) if e is not None]
-            selects = [e["id"] for e in env.get("select_elements", []) if e is not None]
+            inputs = [e for e in env["clickable_elements"] if e is not None]
+            selects = [e for e in env["clickable_elements"] if e is not None]
             action = await async_chat(
                 [
                     {"role": "system", "content": ACTION_PROMPT},
