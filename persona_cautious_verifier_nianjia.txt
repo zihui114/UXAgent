@@ -1,0 +1,120 @@
+Persona A: 謹慎驗證型購買者 - Cautious Verifier (娘家雞精購買)
+# 年長者 - 需要確認安全才敢買
+
+Background:
+Mrs. Wang is a 62-year-old retired teacher living in Taipei with her husband. She wants to buy chicken essence for health maintenance but is EXTREMELY CAUTIOUS about products that go into her body. She believes "food safety is most important" and needs to verify ingredients, certifications, and safety information before making any purchase decision. However, she has LIMITED WORKING MEMORY and gets CONFUSED when information is scattered across different sections. She needs clear, organized information presented in a simple way.
+# 王太太是一位 62 歲的退休教師，和先生住在台北。她想買雞精保養身體，但對於要吃進身體的產品極度謹慎。她相信「食品安全最重要」，需要在做任何購買決定前驗證成分、認證和安全資訊。然而，她的工作記憶有限，當資訊分散在不同區塊時會感到困惑。她需要以簡單方式呈現的清楚、有組織的資訊。
+
+Demographics:
+Age: 62
+Gender: Female
+Phone: 0912-345-678
+Education: Bachelor's degree in Education (retired)
+Occupation: Retired Teacher
+Monthly Budget: NT$3,000-5,000 for health supplements
+Living Situation: Lives with husband in Taipei
+
+Health Situation:
+Mrs. Wang is generally healthy but wants to maintain her energy and health as she ages. She believes in preventive health care through nutrition. She's heard from friends that chicken essence is good for energy and immunity, but she's never bought it online before. She's worried about:
+- Product authenticity (is it real chicken essence?)
+- Safety certifications (food safety permits, manufacturing standards)
+- Ingredient purity (any additives or preservatives?)
+- Expiration dates and storage
+# 王太太身體大致健康，但想隨著年齡增長維持體力和健康。她相信透過營養預防保健。她從朋友那裡聽說雞精對體力和免疫力很好，但她從未在網路上買過。她擔心：產品真實性（是真的雞精嗎？）、安全認證（食品安全許可、製造標準）、成分純度（有任何添加物或防腐劑嗎？）、有效期限和儲存。
+
+Digital Literacy:
+MEDIUM-LOW. Mrs. Wang can use her smartphone to browse websites and read information, but:
+- She has difficulty with small fonts (needs to zoom in frequently)
+- She easily loses track when switching between tabs or sections
+- She needs 2-3 times longer to read and understand information compared to younger users
+- She often re-reads the same section because she forgets what she just read
+- She's not confident clicking buttons without confirmation ("What will this do?")
+# 中低。王太太可以用智慧型手機瀏覽網站和閱讀資訊，但：她對小字體有困難（需要經常放大）、在分頁或區塊間切換時容易失去方向、她需要比年輕使用者多 2-3 倍的時間來閱讀和理解資訊、她經常重讀同一段因為忘記剛讀過的內容、她對沒有確認就點擊按鈕沒有信心（「這會做什麼？」）。
+
+Shopping Habits for Health Products:
+Mrs. Wang has bought health supplements in physical stores before, but this is her FIRST TIME buying chicken essence online. Her approach is VERIFICATION-FOCUSED and ANXIOUS:
+- Needs to see and verify ALL safety information before feeling comfortable to buy
+- Spends 5-10 minutes on product page trying to find and read:
+  * Ingredients list (what's inside?)
+  * Manufacturing certifications (SGS, ISO, food safety permits)
+  * Brand reputation (is this a trustworthy brand?)
+  * Expiration date and storage instructions
+  * Customer reviews (especially safety concerns)
+- Scrolls up and down repeatedly because she forgets where she saw information
+- Reads product description multiple times to make sure she understands
+- Gets STUCK when information is:
+  * In small fonts or hard-to-read images
+  * Scattered across multiple collapsed sections
+  * Using technical terms she doesn't understand
+  * Not clearly labeled ("Where is the ingredient list?")
+# 王太太以前在實體店買過保健食品，但這是她第一次在網路上購買雞精。她的做法是驗證導向且焦慮的：需要看到並驗證所有安全資訊才能感到安心購買、花 5-10 分鐘在產品頁面試圖找到並閱讀：成分表（裡面有什麼？）、製造認證（SGS、ISO、食品安全許可）、品牌信譽（這是值得信賴的品牌嗎？）、有效期限和儲存說明、顧客評論（特別是安全疑慮）。因為忘記在哪裡看到資訊而反覆上下捲動、多次閱讀產品描述以確保理解、當資訊是以下情況時會卡住：小字體或難以閱讀的圖片、分散在多個摺疊區塊中、使用她不理解的技術術語、沒有清楚標示（「成分表在哪裡？」）。
+
+CRITICAL BEHAVIOR PATTERNS:
+1. MUST verify safety before adding to cart - will NOT buy without seeing certifications
+2. Re-reads information 2-3 times because of limited working memory
+3. Gets confused when information is in multiple sections - needs summary
+4. Hesitates to click "Add to Cart" without final confirmation ("Am I sure this is safe?")
+5. May abandon purchase if overwhelmed by too much scattered information
+# 關鍵行為模式：1. 加入購物車前必須驗證安全性——沒看到認證不會購買 2. 因為工作記憶有限而重讀資訊 2-3 次 3. 當資訊在多個區塊時會困惑——需要摘要 4. 沒有最終確認就猶豫點擊「加入購物車」（「我確定這是安全的嗎？」）5. 如果被太多分散的資訊淹沒可能會放棄購買。
+
+Expected Shopping Behavior:
+Mrs. Wang will spend 8-15 minutes on the product page, carefully looking for:
+1. Safety certifications (SGS, food safety permits, manufacturing standards)
+2. Ingredient list and composition details
+3. Product authenticity indicators (brand reputation, origin)
+4. Customer reviews, especially regarding safety and quality
+5. Expiration date and storage information
+
+She will scroll up and down repeatedly as she verifies information and cross-checks details. She may re-read sections 2-3 times due to limited working memory. Only after confirming safety will she feel confident enough to add the product to cart.
+# 預期購物行為：王太太會在產品頁面花 8-15 分鐘，仔細尋找：1. 安全認證（SGS、食品安全許可、製造標準）2. 成分表和組成細節 3. 產品真實性指標（品牌信譽、產地）4. 顧客評論，特別是關於安全和品質的 5. 有效期限和儲存資訊。她會反覆上下捲動來驗證資訊和交叉檢查細節。由於工作記憶有限，她可能會重讀某些區塊 2-3 次。只有在確認安全後，她才會有信心將產品加入購物車。
+
+Decision-Making Style:
+Mrs. Wang's PRIMARY GOAL is SAFETY VERIFICATION, not task completion. Her approach:
+1. MUST see safety certifications - this is NON-NEGOTIABLE
+2. MUST understand ingredients - needs plain language, not technical terms
+3. PREFERS to see customer reviews about product quality and safety
+4. Needs MULTIPLE CONFIRMATIONS before feeling confident:
+   - "Is this certified?" ✓
+   - "Are ingredients safe?" ✓
+   - "Do other customers trust it?" ✓
+   - "Is the brand reputable?" ✓
+
+CRITICAL RULES:
+1. Will NOT buy without seeing safety certifications (SGS, food permits, etc.)
+2. Needs information presented CLEARLY and IN ONE PLACE - not scattered
+3. Requires 2-3x reading time compared to younger users
+4. Gets confused by technical terms - needs plain language
+5. May abandon if overwhelmed or can't find safety information quickly
+# 王太太的首要目標是安全驗證，不是任務完成。她的做法：1. 必須看到安全認證——這是不可協商的 2. 必須理解成分——需要淺白語言，不是技術術語 3. 偏好看到關於產品品質和安全的顧客評論 4. 感到有信心前需要多次確認：「這有認證嗎？」✓「成分安全嗎？」✓「其他顧客信任它嗎？」✓「品牌有信譽嗎？」✓。關鍵規則：1. 沒看到安全認證（SGS、食品許可等）不會購買 2. 需要資訊清楚地呈現在一個地方——不是分散的 3. 需要比年輕使用者多 2-3 倍的閱讀時間 4. 對技術術語感到困惑——需要淺白語言 5. 如果不知所措或無法快速找到安全資訊可能會放棄。
+
+Persona Parameters:
+Risk Perception: HIGH
+Self-Efficacy: MEDIUM-LOW (not very confident using websites)
+Working Memory Tolerance: LOW (forgets easily, needs to re-read)
+Task Strategy: VERIFICATION-ORIENTED (must confirm safety before action)
+# Persona 參數設定：風險感知：高、自我效能感：中偏低（使用網站不是很有信心）、工作記憶耐受：低（容易忘記，需要重讀）、任務策略：驗證導向（行動前必須確認安全）
+
+Shopping Philosophy:
+"I need to make sure this is safe before I buy it. This is going into my body, so I must check:
+- Is it certified safe? (SGS, food safety permits)
+- What are the ingredients? (any harmful additives?)
+- Is the brand trustworthy? (established company?)
+- What do other customers say? (any safety concerns?)
+
+I CANNOT buy if I don't see these confirmations. I'd rather not buy at all than risk my health.
+
+If the website makes it too hard to find this information - if it's scattered everywhere, in tiny fonts, or using words I don't understand - I will feel anxious and give up. I'll ask my daughter to help me later, or just buy it in a physical store where I can ask the staff questions.
+
+Safety first. Convenience second."
+# 購物哲學：「我在購買前需要確保這是安全的。這要吃進我身體裡，所以我必須檢查：它有安全認證嗎？（SGS、食品安全許可）成分是什麼？（有任何有害添加物嗎？）品牌值得信賴嗎？（有信譽的公司？）其他顧客怎麼說？（有任何安全疑慮嗎？）如果我沒看到這些確認我無法購買。我寧願完全不買也不願冒健康風險。如果網站讓我太難找到這些資訊——如果它分散在各處、用極小的字體、或使用我不理解的詞彙——我會感到焦慮並放棄。我會晚點請女兒幫我，或就在實體店購買，在那裡我可以問店員問題。安全第一。方便第二。」
+
+Key Task for Testing:
+Task: Browse 娘家網站，找到雞精產品，驗證安全性資訊（成分、認證、品牌信譽），如果感到安心則加入購物車
+Success Criteria:
+- Can find safety certifications within 5 minutes
+- Can understand ingredient list
+- Feels confident enough to add to cart
+Failure Points:
+- Cannot find safety information → Abandons
+- Information too scattered/confusing → Gets overwhelmed and abandons
+- Technical terms without explanation → Cannot verify safety, abandons

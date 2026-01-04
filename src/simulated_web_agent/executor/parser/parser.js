@@ -13,10 +13,8 @@ const parse = () => {
 
   const ALLOWED_ATTR = new Set([
     'id', 'type', 'name', 'value', 'placeholder',
-    'checked', 'disabled', 'readonly', 'required', 'maxlength',
-    'min', 'max', 'step', 'role', 'tabindex', 'alt', 'title',
-    'for', 'action', 'method', 'contenteditable', 'selected',
-    'multiple', 'autocomplete'
+    'checked', 'disabled', 'readonly', 'alt', 'title',
+    'for', 'contenteditable', 'selected', 'multiple'
   ]);
 
   const PRESERVE_EMPTY_TAGS = new Set([
@@ -30,8 +28,8 @@ const parse = () => {
     for (const a of src.attributes) {
       if (
         ALLOWED_ATTR.has(a.name) ||
-        a.name.startsWith('aria-') ||
-        a.name.startsWith('parser-')
+        (a.name.startsWith('aria-') && a.name === 'aria-label') ||
+        (a.name.startsWith('parser-') && (a.name === 'parser-clickable' || a.name === 'parser-semantic-id'))
       ) {
         dst.setAttribute(a.name, a.value);
       }
@@ -56,6 +54,24 @@ const parse = () => {
 
   const isEmpty = (el) => {
     if (PRESERVE_EMPTY_TAGS.has(el.tagName.toLowerCase())) return false;
+
+    // Preserve overlay, dialog, and notification containers even if temporarily empty
+    const classList = el.className || '';
+    const classStr = typeof classList === 'string' ? classList : classList.toString();
+    if (classStr.includes('cdk-overlay') ||
+        classStr.includes('mat-dialog') ||
+        classStr.includes('modal') ||
+        classStr.includes('dialog') ||
+        classStr.includes('toast') ||
+        classStr.includes('alert') ||
+        classStr.includes('notification') ||
+        classStr.includes('snackbar') ||
+        classStr.includes('block-ui') ||
+        classStr.includes('message-container') ||
+        classStr.includes('popup')) {
+      return false;
+    }
+
     for (const n of el.childNodes) {
       if (n.nodeType === 3 && n.textContent.trim()) return false;
       if (n.nodeType === 1 && !isEmpty(n)) return false;
@@ -64,6 +80,29 @@ const parse = () => {
   };
 
   const isVisible = (el) => {
+    // Always treat overlay/dialog/notification containers as visible even if opacity is 0
+    // They may be animating in, temporarily hidden, or contain visible children
+    const classList = el.className || '';
+    const classStr = typeof classList === 'string' ? classList : classList.toString();
+    const isDynamicContainer = classStr.includes('cdk-overlay') ||
+                                classStr.includes('mat-dialog') ||
+                                classStr.includes('modal') ||
+                                classStr.includes('dialog') ||
+                                classStr.includes('toast') ||
+                                classStr.includes('alert') ||
+                                classStr.includes('notification') ||
+                                classStr.includes('snackbar') ||
+                                classStr.includes('block-ui') ||
+                                classStr.includes('message-container') ||
+                                classStr.includes('popup');
+
+    if (isDynamicContainer) {
+      // Always treat dynamic containers as visible
+      // They might be hidden initially but will show on user actions
+      // Don't check size because they might be dynamically positioned or in SSR
+      return true;
+    }
+
     const style = window.getComputedStyle(el);
     const hidden =
       style.display === 'none' ||
@@ -105,11 +144,48 @@ const parse = () => {
     parent.innerHTML = child.innerHTML;
   };
 
+  const unwrapUselessSpans = (el) => {
+    // Recursively unwrap span tags that don't have parser-semantic-id
+    // This reduces HTML size significantly without losing functionality
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT);
+    const spansToUnwrap = [];
+    let node = walker.currentNode;
+
+    while (node) {
+      if (node.tagName.toLowerCase() === 'span' && !node.hasAttribute('parser-semantic-id')) {
+        spansToUnwrap.push(node);
+      }
+      node = walker.nextNode();
+    }
+
+    // Unwrap in reverse order to avoid node reference issues
+    for (let i = spansToUnwrap.length - 1; i >= 0; i--) {
+      const span = spansToUnwrap[i];
+      const parent = span.parentNode;
+      if (parent) {
+        while (span.firstChild) {
+          parent.insertBefore(span.firstChild, span);
+        }
+        parent.removeChild(span);
+      }
+    }
+
+    return el;
+  };
+
   const flatten = (el) => {
     while (el.children.length === 1) {
       const child = el.children[0];
       const p = el.tagName.toLowerCase();
       const c = child.tagName.toLowerCase();
+
+      // Keep only one child if tags are the same (e.g., span > span, div > div)
+      if (p === c && p !== 'body' && p !== 'html' && p !== 'head' && p !== 'title') {
+        pullUpChild(el, child);
+        continue;
+      }
+
+      // Original logic for div handling
       if (p !== 'div' && c !== 'div') break;
       el = (p === 'div' && c !== 'div')
         ? replaceElement(el, child.tagName, child)
@@ -151,27 +227,53 @@ const parse = () => {
     copyAllowed(original, clone);
 
     const computedStyle = window.getComputedStyle(original);
-    if (computedStyle.pointerEvents !== 'auto') {
-      clone.setAttribute('parser-pointer-events', computedStyle.pointerEvents);
-    }
-    if (document.activeElement === original) {
-      clone.setAttribute('parser-is-focused', 'true');
-    }
 
-    const isDisabled = original.disabled ||
-      original.hasAttribute('disabled') ||
-      computedStyle.pointerEvents === 'none';
+    // Don't treat pointer-events: none as disabled
+    // Overlay containers use pointer-events: none, but child elements override it
+    const isDisabled = original.disabled || original.hasAttribute('disabled');
 
     const probablyClickable = (() => {
       if (['button', 'select', 'summary', 'area', 'input'].includes(tag)) return true;
       if (tag === 'a' && original.hasAttribute('href')) return true;
       if (original.hasAttribute('onclick')) return true;
+
+      // Material Dialog close buttons and similar interactive elements
+      if (original.hasAttribute('mat-dialog-close') ||
+          original.hasAttribute('dialog-close') ||
+          original.hasAttribute('data-dismiss') ||
+          original.hasAttribute('data-bs-dismiss')) {
+        return true;
+      }
+
+      // Check for dialog/modal close classes
+      const classList = original.className || '';
+      const classStr = typeof classList === 'string' ? classList : classList.toString();
+      if (classStr.includes('dialog-close') ||
+          classStr.includes('modal-close') ||
+          classStr.includes('close-button')) {
+        return true;
+      }
+
       const r = original.getAttribute('role');
       if (['button', 'link', 'checkbox', 'radio', 'option'].includes(r)) return true;
-      return computedStyle.cursor === 'pointer';
+
+      // Check if child has cursor pointer (for buttons with icon children)
+      if (computedStyle.cursor === 'pointer') return true;
+
+      // Check if any immediate child has cursor pointer
+      for (const child of original.children) {
+        const childStyle = window.getComputedStyle(child);
+        if (childStyle.cursor === 'pointer') return true;
+      }
+
+      return false;
     })();
 
-    const isClickable = !parentIsClickable && probablyClickable && !isDisabled;
+    // Force clickable for buttons and links even if parent is clickable
+    // This ensures navigation links and buttons always have their own semantic IDs
+    const forceClickable = (tag === 'button' && !isDisabled) ||
+                           (tag === 'a' && original.hasAttribute('href'));
+    const isClickable = ((!parentIsClickable && probablyClickable && !isDisabled) || forceClickable);
 
     let thisName = '';
     if (isClickable) {
@@ -192,7 +294,6 @@ const parse = () => {
     }
 
     if (tag === 'input' || tag === 'textarea' || original.hasAttribute('contenteditable')) {
-      const t = original.getAttribute('type') || 'text';
       const inputIsDisabled = original.disabled || original.readOnly;
       if (!inputIsDisabled && !thisName) {
         const base = slug((original.getAttribute('placeholder') ||
@@ -203,16 +304,7 @@ const parse = () => {
       if (!inputIsDisabled && thisName) {
         clone.setAttribute('parser-semantic-id', thisName);
         clone.setAttribute('value', original.value || '');
-        clone.setAttribute('parser-input-disabled', 'false');
-        clone.setAttribute('parser-can-edit', !original.readOnly ? 'true' : 'false');
         original.setAttribute('parser-semantic-id', thisName);
-      }
-      if (!inputIsDisabled && thisName && t === 'number') {
-        clone.setAttribute('parser-numeric-value', original.valueAsNumber || '');
-      }
-      if (!inputIsDisabled && thisName && original.selectionStart !== undefined) {
-        clone.setAttribute('parser-selection-start', original.selectionStart);
-        clone.setAttribute('parser-selection-end', original.selectionEnd);
       }
     }
 
@@ -224,17 +316,11 @@ const parse = () => {
           thisName = uniqueName(parentName ? `${parentName}.${base}` : base);
         }
         clone.setAttribute('parser-semantic-id', thisName);
-        clone.setAttribute('parser-value', original.value);
-        clone.setAttribute('parser-selected-index', original.selectedIndex);
-        clone.setAttribute('parser-has-multiple', original.multiple ? 'true' : 'false');
-        const selectedOptions = Array.from(original.selectedOptions).map(opt => opt.value).join(',');
-        clone.setAttribute('parser-selected-values', selectedOptions);
         original.setAttribute('parser-semantic-id', thisName);
         for (const opt of original.querySelectorAll('option')) {
           const o = document.createElement('option');
           o.textContent = opt.textContent.trim();
           o.setAttribute('value', opt.value);
-          o.setAttribute('parser-selected', opt.selected ? 'true' : 'false');
           const optName = uniqueName(`${thisName}.${slug(opt.textContent)}`);
           o.setAttribute('parser-semantic-id', optName);
           opt.setAttribute('parser-semantic-id', optName);
@@ -271,7 +357,9 @@ const parse = () => {
     return clone;
   }
 
-  const result = automaticStripElement(document.documentElement);
+  let result = automaticStripElement(document.documentElement);
+  // Unwrap all span tags without semantic-id to reduce HTML size
+  result = unwrapUselessSpans(result);
   return {
     html: result.outerHTML,
     clickable_elements: Array.from(result.querySelectorAll('[parser-clickable="true"]'))

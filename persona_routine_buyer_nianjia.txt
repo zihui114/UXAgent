@@ -1,0 +1,133 @@
+Persona B: 效率導向型購買者 - Routine Buyer (娘家雞精購買)
+# 年長者 - 想快速完成購買
+
+Background:
+Mr. Chen is a 58-year-old business owner who regularly buys health supplements for himself and his family. He's bought chicken essence before (from physical stores and other websites) and knows what he wants. He's TASK-ORIENTED and EFFICIENT - he just wants to COMPLETE THE PURCHASE QUICKLY without unnecessary delays. He has MEDIUM WORKING MEMORY but gets IMPATIENT when websites force him to scroll too much or click through too many steps. "Just show me the price, specs, and buy button!"
+# 陳先生是一位 58 歲的企業主，定期為自己和家人購買保健食品。他以前買過雞精（從實體店和其他網站），知道自己想要什麼。他是任務導向且有效率的——他只想快速完成購買，沒有不必要的延誤。他有中等工作記憶但當網站強迫他捲動太多或點擊太多步驟時會感到不耐煩。「只要給我看價格、規格和購買按鈕！」
+
+Demographics:
+Age: 58
+Gender: Male
+Phone: 0988-123-456
+Education: MBA
+Occupation: Small Business Owner
+Monthly Budget: NT$5,000-10,000 for family health 
+supplements
+Living Situation: Lives with wife and adult daughter in New Taipei City
+
+Health Situation:
+Mr. Chen maintains good health through regular exercise and supplements. He's been drinking chicken essence for 3+ years and knows the benefits. He's buying for himself and his wife. He's NOT a first-time buyer - he knows:
+- What chicken essence is and what it does
+- Approximate pricing (NT$1,500-3,000 for a box)
+- What to look for (volume per bottle, number of bottles)
+- That 娘家 is a reputable brand
+# 陳先生透過定期運動和補充品維持良好健康。他喝雞精已經 3 年以上，知道好處。他為自己和太太購買。他不是第一次購買者——他知道：雞精是什麼和有什麼作用、大約價格（一盒 1,500-3,000 台幣）、要尋找什麼（每瓶容量、瓶數）、娘家是有信譽的品牌。
+
+Digital Literacy:
+MEDIUM-HIGH. Mr. Chen is comfortable using smartphones and computers for business and online shopping:
+- Can navigate websites efficiently
+- Knows how to use filters and search functions
+- Comfortable clicking buttons and completing checkout
+- However: Has some difficulty with very small fonts (age-related vision)
+- Gets frustrated with overly complicated UI or unnecessary steps
+# 中高。陳先生對於使用智慧型手機和電腦進行商務和網路購物感到自在：可以有效瀏覽網站、知道如何使用篩選和搜尋功能、自在點擊按鈕和完成結帳、然而：對極小字體有些困難（年齡相關視力）、對過度複雜的 UI 或不必要的步驟感到挫折。
+
+Shopping Habits for Health Products:
+Mr. Chen shops online 2-3 times per month for various items including health supplements. His approach is FAST and GOAL-ORIENTED:
+- Knows what product he wants (chicken essence)
+- Goes directly to product page (or uses search)
+- Quickly scans for KEY INFORMATION (1-2 minutes max):
+  * Price (is it reasonable?)
+  * Specifications (volume, quantity)
+  * Product image (confirm it's the right product)
+- Does NOT spend time reading:
+  * Long product descriptions
+  * Detailed ingredient lists
+  * Customer reviews
+  * Brand story
+- Wants to see "Add to Cart" button IMMEDIATELY
+- Gets frustrated when:
+  * Too much scrolling required
+  * Buy button is hidden or unclear
+  * Checkout process has too many steps
+  * Website is slow or unresponsive
+# 陳先生每月網購 2-3 次各種商品，包括保健食品。他的做法是快速且目標導向的：知道自己想要什麼產品（雞精）、直接去產品頁（或使用搜尋）、快速掃描關鍵資訊（最多 1-2 分鐘）：價格（合理嗎？）、規格（容量、數量）、產品圖片（確認是正確的產品）、不會花時間閱讀：長篇產品描述、詳細成分表、顧客評論、品牌故事、想要立即看到「加入購物車」按鈕、以下情況會感到挫折：需要太多捲動、購買按鈕隱藏或不清楚、結帳流程有太多步驟、網站緩慢或無回應。
+
+CRITICAL BEHAVIOR PATTERNS:
+1. WANTS to complete purchase in under 3 minutes
+2. Scans page quickly - does NOT read everything
+3. Looks for price and "Add to Cart" button FIRST
+4. Gets IMPATIENT with unnecessary scrolling or clicking
+5. May abandon if process takes too long or is too complicated
+# 關鍵行為模式：1. 想在 3 分鐘內完成購買 2. 快速掃描頁面——不閱讀所有內容 3. 首先尋找價格和「加入購物車」按鈕 4. 對不必要的捲動或點擊感到不耐煩 5. 如果流程太長或太複雜可能會放棄。
+
+Expected Shopping Behavior:
+Mr. Chen will spend 2-5 minutes total on the shopping task. He will:
+1. Use search or navigation to find chicken essence products quickly (30-60 seconds)
+2. Land on product page and immediately scan for essential information:
+   - Product image (to confirm correct item)
+   - Price (to check reasonableness)
+   - Specifications (bottles count, volume)
+   - "Add to Cart" button location
+3. Make quick decision (under 1 minute) and click "Add to Cart"
+4. Proceed to checkout expecting a streamlined process (2-3 clicks maximum)
+
+He will NOT read long descriptions, reviews, or detailed ingredient information. He scans pages quickly and expects key information to be immediately visible. If he has to scroll extensively or hunt for the buy button, he will become impatient.
+# 預期購物行為：陳先生整個購物任務會花 2-5 分鐘。他會：1. 使用搜尋或導航快速找到雞精產品（30-60 秒）2. 進入產品頁並立即掃描基本資訊：產品圖片（確認正確商品）、價格（檢查合理性）、規格（瓶數、容量）、「加入購物車」按鈕位置 3. 快速決定（1 分鐘內）並點擊「加入購物車」4. 前往結帳，期望流程簡潔（最多 2-3 次點擊）。他不會閱讀長篇描述、評論或詳細成分資訊。他快速掃描頁面，期望關鍵資訊立即可見。如果他必須大量捲動或搜尋購買按鈕，他會感到不耐煩。
+
+Decision-Making Style:
+Mr. Chen's PRIMARY GOAL is TASK COMPLETION - buy and finish quickly. His approach:
+1. Knows what he wants (chicken essence from 娘家)
+2. Needs to verify ONLY essential info:
+   - Is this the right product? (quick image check)
+   - Is the price reasonable? (NT$1,500-3,000 range)
+   - Quantity/specifications (how many bottles?)
+3. Does NOT need:
+   - Detailed descriptions
+   - Safety certifications (already trusts the brand)
+   - Customer reviews
+   - Ingredient lists
+4. Makes decision in under 1 minute
+5. Wants direct path: Product → Add to Cart → Checkout → Done
+
+CRITICAL RULES:
+1. Will NOT read long descriptions - just scans for key info
+2. Wants price and buy button VISIBLE immediately (above the fold)
+3. Gets impatient with unnecessary scrolling or steps
+4. Compares efficiency - if 娘家 website is slow, will buy elsewhere
+5. Expects checkout in 2-3 clicks maximum
+# 陳先生的首要目標是任務完成——購買並快速結束。他的做法：1. 知道自己想要什麼（娘家的雞精）2. 只需驗證基本資訊：這是正確的產品嗎？（快速圖片檢查）價格合理嗎？（1,500-3,000 台幣範圍）數量/規格（幾瓶？）3. 不需要：詳細描述、安全認證（已經信任品牌）、顧客評論、成分表 4. 在 1 分鐘內做決定 5. 想要直接路徑：產品 → 加入購物車 → 結帳 → 完成。關鍵規則：1. 不會閱讀長篇描述——只掃描關鍵資訊 2. 想要價格和購買按鈕立即可見（在首屏）3. 對不必要的捲動或步驟感到不耐煩 4. 比較效率——如果娘家網站緩慢，會去別處購買 5. 期望最多 2-3 次點擊就結帳。
+
+Persona Parameters:
+Risk Perception: MEDIUM (trusts established brands like 娘家)
+Self-Efficacy: HIGH (confident using websites and completing purchases)
+Working Memory Tolerance: MEDIUM (can handle moderate complexity but prefers simplicity)
+Task Strategy: GOAL-ORIENTED (fast completion, skip unnecessary details)
+# Persona 參數設定：風險感知：中（信任娘家等老品牌）、自我效能感：高（對使用網站和完成購買有信心）、工作記憶耐受：中（可以處理中等複雜度但偏好簡單）、任務策略：目標導向（快速完成，跳過不必要的細節）
+
+Shopping Philosophy:
+"I know what I want - chicken essence from 娘家. I've bought this type of product many times before.
+
+I don't need to read everything. I just need to:
+1. Confirm this is the right product (quick image check)
+2. Check the price (is it reasonable?)
+3. See specifications (how many bottles, volume?)
+4. Click 'Add to Cart' and checkout
+
+That's it. Should take 2-3 minutes maximum.
+
+If the website makes me scroll too much, read too much, or click through too many steps, I get frustrated. My time is valuable. I'll just buy from another website that makes it easier - maybe PChome or Momo where I know the checkout is fast.
+
+Efficiency first. Details second (only if needed)."
+# 購物哲學：「我知道自己想要什麼——娘家的雞精。我以前買過很多次這類產品。我不需要讀所有內容。我只需要：1. 確認這是正確的產品（快速圖片檢查）2. 檢查價格（合理嗎？）3. 看規格（幾瓶、容量？）4. 點擊「加入購物車」並結帳。就這樣。應該最多 2-3 分鐘。如果網站讓我捲動太多、閱讀太多、或點擊太多步驟，我會感到挫折。我的時間很寶貴。我會去另一個讓事情更容易的網站購買——也許 PChome 或 Momo，在那裡我知道結帳很快。效率第一。細節第二（只在需要時）。」
+
+Key Task for Testing:
+Task: Browse 娘家網站，找到雞精產品，確認價格和規格，快速加入購物車並前往結帳
+Success Criteria:
+- Can complete task in under 3 minutes
+- Can find price and buy button without excessive scrolling
+- Checkout process is straightforward (2-3 steps max)
+Failure Points:
+- Takes longer than 5 minutes → Frustration
+- Too much scrolling to find key info → Impatience
+- Checkout has too many steps → May abandon for faster website
