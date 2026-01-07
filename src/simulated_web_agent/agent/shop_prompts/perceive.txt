@@ -37,3 +37,31 @@ INCLUDE EVERY DETAIL ON THE WEB PAGE, as much as possible. at least include all 
 INCLUDE EVERY DETAIL ON THE WEB PAGE, as much as possible. at least include all the text on the page. All input text should be included in your output.
 INCLUDE EVERY DETAIL ON THE WEB PAGE, as much as possible. at least include all the text on the page. All input text should be included in your output.
 </IMPORTANT>
+
+---
+
+## Special Note: Price Recognition
+
+When describing prices on the page, pay attention to these HTML attributes that indicate price types:
+
+- **parser-strikethrough="true"**: This element has a strikethrough style (usually indicates original price that has been crossed out)
+- **parser-price-type="original"**: Explicitly marked as original price
+- **parser-price-type="sale"**: Explicitly marked as sale/discount price
+
+**When you see multiple prices, describe them clearly:**
+- If a price has `parser-strikethrough="true"` or `parser-price-type="original"`, describe it as "original price" or "crossed-out price"
+- If a price has `parser-price-type="sale"`, describe it as "sale price" or "discount price"
+
+**Examples:**
+
+✅ Correct description:
+"The product shows an original price of NT$1,200 (crossed out) and a sale price of NT$980"
+
+✅ Correct description:
+"The item is priced at NT$980, with the original price NT$1,200 shown as crossed out"
+
+❌ Incorrect description:
+"I see two prices: NT$1,200 and NT$980" (unclear which is which)
+
+**Note**: These attributes are hints to help you describe prices accurately. You should still include ALL text as it appears, but use these attributes to clarify price types in your natural language description.
+```
