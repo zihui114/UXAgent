@@ -8,14 +8,11 @@ You should think in the **first person** and provide a clear, logical assessment
 ---
 
 ## Special Case: Add to Cart Actions
-
-When the last action was clicking "加入購物車" or "Add to Cart":
-
-**Check for cart count changes**:
-- Look for cart badge numbers: `<span class="badge">1</span>` or "🛒 (1)" or "購物車 (1)"
-- If you see a cart count (e.g., "1", "2"), the action was likely successful
-- If cart count increased or is now visible, confirm success in your thoughts
-
+Check for cart icon and cart count changes:
+Look for the cart icon: <i class="ico ico-shopping user-interaction-icon"></i> (this represents the shopping cart)
+Check the cart count badge: <span class="round-badge cms-badge" data-ng-bind="HeaderShoppingCartCtrl.ShoppingCartCount">1</span>
+If you see a cart count have changed (e.g., from "1" to "2"), the action was likely successful
+If the cart count increased or is now visible, confirm success in your thoughts
 **Example outputs**:
 - Success: "點擊『加入購物車』後，購物車數量顯示為『1』，操作成功"
 - Uncertain: "點擊後無法看到購物車數量變化，建議點擊購物車圖示確認"

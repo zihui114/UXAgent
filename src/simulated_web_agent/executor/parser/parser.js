@@ -310,6 +310,50 @@ const parse = () => {
       clone.setAttribute("parser-price-type", "sale");
     }
 
+    // ✅ 新增：計算單價（針對特價/當前價格）
+    // 只在非刪除線的價格元素上計算單價
+    if (!computedStyle.textDecoration.includes("line-through")) {
+      const textContent = original.textContent || "";
+
+      // 提取價格（支援 NT$X,XXX 或 $X,XXX 格式）
+      const priceMatch = textContent.match(/(?:NT)?\$\s?([\d,]+)/);
+
+      if (priceMatch) {
+        const price = parseInt(priceMatch[1].replace(/,/g, ""), 10);
+
+        // 在當前元素及其父元素中尋找數量資訊
+        let quantityElement = original;
+        let quantityMatch = null;
+        let searchDepth = 0;
+
+        // 向上搜尋 3 層父元素尋找數量資訊
+        while (quantityElement && searchDepth < 3) {
+          const searchText = quantityElement.textContent || "";
+
+          // 支援多種數量格式：60入、20包、30盒、60支、10瓶、5罐
+          quantityMatch = searchText.match(/(\d+)\s*(?:入|包|盒|支|瓶|罐|顆|粒|片|條|袋|組)/);
+
+          if (quantityMatch) break;
+
+          quantityElement = quantityElement.parentElement;
+          searchDepth++;
+        }
+
+        if (quantityMatch && !isNaN(price)) {
+          const quantity = parseInt(quantityMatch[1], 10);
+
+          if (quantity > 0) {
+            const unitPrice = Math.round(price / quantity);
+
+            // 添加單價和數量屬性
+            clone.setAttribute("parser-unit-price", unitPrice.toString());
+            clone.setAttribute("parser-total-quantity", quantity.toString());
+            clone.setAttribute("parser-total-price", price.toString());
+          }
+        }
+      }
+    }
+
     // Don't treat pointer-events: none as disabled
     // Overlay containers use pointer-events: none, but child elements override it
     const isDisabled = original.disabled || original.hasAttribute("disabled");

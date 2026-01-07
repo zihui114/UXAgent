@@ -46,22 +46,26 @@ When describing prices on the page, pay attention to these HTML attributes that 
 
 - **parser-strikethrough="true"**: This element has a strikethrough style (usually indicates original price that has been crossed out)
 - **parser-price-type="original"**: Explicitly marked as original price
-- **parser-price-type="sale"**: Explicitly marked as sale/discount price
+- **parser-price-type="sale"**: Explicitly marked as sale/discount, and the price will be the price you pay
 
-**When you see multiple prices, describe them clearly:**
-- If a price has `parser-strikethrough="true"` or `parser-price-type="original"`, describe it as "original price" or "crossed-out price"
-- If a price has `parser-price-type="sale"`, describe it as "sale price" or "discount price"
+**CRITICAL: When you see multiple prices, always prioritize showing the ACTUAL PRICE (the amount the customer will pay):**
+- The LOWER price (usually marked as "sale" or without strikethrough) is the **current price** - this is what the customer will actually pay
+- The HIGHER price (usually crossed out or marked as "original") is for reference only, showing the discount
+
 
 **Examples:**
 
 ✅ Correct description:
-"The product shows an original price of NT$1,200 (crossed out) and a sale price of NT$980"
-
-✅ Correct description:
-"The item is priced at NT$980, with the original price NT$1,200 shown as crossed out"
+"The 60-pack costs NT$8,100 (discounted from NT$10,050)"
+"Current price: NT$980 for 20 packs"
+"Price: NT$2,952 for 20 items"
 
 ❌ Incorrect description:
+"The product shows an original price of NT$1,200 (crossed out) and a sale price of NT$980" (puts original price first, unclear which to pay)
 "I see two prices: NT$1,200 and NT$980" (unclear which is which)
+"Costs NT$8,100" (missing unit price when parser-unit-price is available)
 
-**Note**: These attributes are hints to help you describe prices accurately. You should still include ALL text as it appears, but use these attributes to clarify price types in your natural language description.
+**Key principle**: Always make it crystal clear which price is the ACTUAL PRICE the customer needs to pay. Start with the current price, include unit price when available (very important for comparison shopping), and then mention the original price if present.
+
+**Note**: These attributes are hints to help you describe prices accurately. You should still include ALL text as it appears, but use these attributes to clarify price types in your natural language description, with emphasis on the actual current price and unit pricing.
 ```
