@@ -150,9 +150,37 @@ async def _run_for_persona_and_intent(
 
             # Use our policy to determine the action for this step from the environment
             action = await policy.forward(env)
-            action_trace.append(action)
+
+            # 記錄 action 以及對應元素的 HTML 資訊
+            action_data = json.loads(action) if isinstance(action, str) else action
+            target_id = action_data.get("target", "")
+
+            # 從 observation 中取得元素的 class 和 id 資訊
+            element_info = {}
+            if obs.get("element_info_map") and target_id:
+                element_info = obs["element_info_map"].get(target_id, {})
+            elif obs.get("clickable_elements"):
+                # 嘗試從 clickable_elements 找到對應元素
+                for el in obs["clickable_elements"]:
+                    if isinstance(el, dict) and el.get("semantic_id") == target_id:
+                        element_info = {
+                            "class": el.get("class", ""),
+                            "id": el.get("id", ""),
+                            "tag": el.get("tag", ""),
+                            "data_attributes": el.get("data_attributes", {}),
+                        }
+                        break
+
+            # 建立包含元素資訊的 action 記錄
+            enriched_action = {
+                "action": action_data,
+                "element_info": element_info,
+                "step": steps_taken,
+            }
+            action_trace.append(json.dumps(enriched_action))
+
             with open(trace_dir / "action_trace.json", "w") as f:
-                json.dump(action_trace, f, indent=2)
+                json.dump(action_trace, f, indent=2, ensure_ascii=False)
             with open(
                 trace_dir
                 / "observation_trace"

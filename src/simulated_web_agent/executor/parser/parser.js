@@ -271,6 +271,7 @@ const parse = () => {
     return clone;
   }
 
+<<<<<<< Updated upstream
   const result = automaticStripElement(document.documentElement);
   return {
     html: result.outerHTML,
@@ -295,6 +296,95 @@ const parse = () => {
         multiple: el.multiple,
         selectedValues: Array.from(el.selectedOptions).map(opt => opt.value)
       })),
+=======
+  let result = automaticStripElement(document.documentElement);
+  // Unwrap all span tags without semantic-id to reduce HTML size
+  result = unwrapUselessSpans(result);
+
+  // 檢索 toast 訊息和購物車變化
+  let toastInfo = {
+    messages: [],
+    cartChanges: [],
+    summary: {
+      totalToasts: 0,
+      visibleToasts: 0,
+      cartChanged: false,
+      latestCartCount: 0,
+    },
+  };
+
+  if (typeof window.__getToastMessages === "function") {
+    try {
+      toastInfo = window.__getToastMessages();
+    } catch (e) {
+      console.warn("Failed to get toast messages:", e);
+    }
+  }
+
+  // 建立 semantic-id 到原始元素資訊的映射
+  const elementInfoMap = {};
+  document.querySelectorAll('[parser-semantic-id]').forEach((el) => {
+    const semanticId = el.getAttribute('parser-semantic-id');
+    elementInfoMap[semanticId] = {
+      class: el.className || '',
+      id: el.id || '',
+      tag: el.tagName.toLowerCase(),
+      // 記錄元素的 data-* 屬性（常用於 CSS 選擇器）
+      dataAttributes: Array.from(el.attributes)
+        .filter(attr => attr.name.startsWith('data-'))
+        .reduce((acc, attr) => {
+          acc[attr.name] = attr.value;
+          return acc;
+        }, {}),
+    };
+  });
+
+  return {
+    html: result.outerHTML,
+    // 新增：元素資訊映射，包含原始 class、id 等
+    element_info_map: elementInfoMap,
+    clickable_elements: Array.from(
+      result.querySelectorAll('[parser-clickable="true"]')
+    ).map((el) => {
+      const semanticId = el.getAttribute("parser-semantic-id");
+      const info = elementInfoMap[semanticId] || {};
+      return {
+        semantic_id: semanticId,
+        class: info.class || '',
+        id: info.id || '',
+        tag: info.tag || el.tagName.toLowerCase(),
+        data_attributes: info.dataAttributes || {},
+      };
+    }),
+    hoverable_elements: Array.from(
+      result.querySelectorAll('[parser-maybe-hoverable="true"]')
+    ).map((el) => el.getAttribute("parser-semantic-id")),
+    input_elements: Array.from(
+      result.querySelectorAll(
+        "input[parser-semantic-id], textarea[parser-semantic-id], [contenteditable][parser-semantic-id]"
+      )
+    ).map((el) => ({
+      id: el.getAttribute("parser-semantic-id"),
+      disabled: el.hasAttribute("parser-input-disabled"),
+      type:
+        el.getAttribute("type") ||
+        (el.tagName.toLowerCase() === "textarea"
+          ? "textarea"
+          : "contenteditable"),
+      value: el.value || el.textContent,
+      canEdit: el.getAttribute("parser-can-edit") === "true",
+      isFocused: el.getAttribute("parser-is-focused") === "true",
+    })),
+    select_elements: Array.from(
+      result.querySelectorAll("select[parser-semantic-id]")
+    ).map((el) => ({
+      id: el.getAttribute("parser-semantic-id"),
+      value: el.value,
+      selectedIndex: el.selectedIndex,
+      multiple: el.multiple,
+      selectedValues: Array.from(el.selectedOptions).map((opt) => opt.value),
+    })),
+>>>>>>> Stashed changes
   };
 }
 
