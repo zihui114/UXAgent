@@ -514,13 +514,43 @@ const parse = () => {
     }
   }
 
+  // ========== 建立 semantic-id 到原始元素資訊的映射 ==========
+  const elementInfoMap = {};
+  document.querySelectorAll('[parser-semantic-id]').forEach((el) => {
+    const semanticId = el.getAttribute('parser-semantic-id');
+    elementInfoMap[semanticId] = {
+      class: el.className || '',
+      id: el.id || '',
+      tag: el.tagName.toLowerCase(),
+      // 記錄元素的 data-* 屬性（常用於 CSS 選擇器）
+      dataAttributes: Array.from(el.attributes)
+        .filter(attr => attr.name.startsWith('data-'))
+        .reduce((acc, attr) => {
+          acc[attr.name] = attr.value;
+          return acc;
+        }, {}),
+    };
+  });
+
   // ========== 回傳 ==========
 
   return {
     html: result.outerHTML,
+    // 元素資訊映射，包含原始 class、id 等
+    element_info_map: elementInfoMap,
     clickable_elements: Array.from(
       result.querySelectorAll('[parser-clickable="true"]')
-    ).map((el) => el.getAttribute("parser-semantic-id")),
+    ).map((el) => {
+      const semanticId = el.getAttribute("parser-semantic-id");
+      const info = elementInfoMap[semanticId] || {};
+      return {
+        semantic_id: semanticId,
+        class: info.class || '',
+        id: info.id || '',
+        tag: info.tag || el.tagName.toLowerCase(),
+        data_attributes: info.dataAttributes || {},
+      };
+    }),
     hoverable_elements: Array.from(
       result.querySelectorAll('[parser-maybe-hoverable="true"]')
     ).map((el) => el.getAttribute("parser-semantic-id")),
