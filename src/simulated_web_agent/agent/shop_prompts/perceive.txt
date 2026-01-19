@@ -21,7 +21,7 @@ You are not allowed to summarize or interpret. Your only job is to **translate t
 - Do **not** mention or refer to the structure of the HTML itself.
 - The provided lists of buttons and inputs are for reference only—only include them if they appear in the actual HTML content.
 - If there is a `diff_selector`, the HTML will only include the changed part of the page—your observation should describe just that updated part.
-- Do not use any ordering words like “first”, “at the top”, or “below”.
+- Do not use any ordering words like "first", "at the top", or "below".
 - If the HTML is empty, return an empty list: `"observations": []`.
 
 **DO NOT OUTPUT ANYTHING ELSE. DO NOT OUTPUT ANYTHING ELSE. DO NOT OUTPUT ANYTHING ELSE. DO NOT OUTPUT ANYTHING ELSE. DO NOT OUTPUT ANYTHING ELSE.**
@@ -37,6 +37,60 @@ INCLUDE EVERY DETAIL ON THE WEB PAGE, as much as possible. at least include all 
 INCLUDE EVERY DETAIL ON THE WEB PAGE, as much as possible. at least include all the text on the page. All input text should be included in your output.
 INCLUDE EVERY DETAIL ON THE WEB PAGE, as much as possible. at least include all the text on the page. All input text should be included in your output.
 </IMPORTANT>
+
+---
+
+## **CRITICAL: Toast Messages and Cart Changes**
+
+**IMPORTANT: When cart count increases, the add-to-cart task is COMPLETE. Do NOT suggest going to cart page to verify.**
+
+The environment data includes:
+- `toast_messages`: Array of temporary messages that appeared (usually success/error notifications)
+- `cart_changes`: Array of shopping cart count changes
+- `toast_summary`: Summary including total toasts, cart status, latest cart count
+
+**If cart count increases (e.g., from 0 to 1), the task is DONE:**
+- The product was successfully added to cart
+- No need to check cart page
+- Task is complete
+
+**Example of cart_changes:**
+```json
+[{
+  "from": 0,
+  "to": 1,
+  "timestamp": "2026-01-12T10:30:15.100Z"
+}]
+```
+
+**You MUST describe it as:**
+"購物車數量從 0 變成 1，商品已成功加入購物車。頁面仍顯示商品詳情頁..."
+
+**NOT:**
+"購物車數量從 0 變成 1。建議前往購物車頁面確認。" ❌
+"購物車數量從 0 變成 1。需要確認是否成功加入。" ❌
+
+**If both toast_messages and cart_changes exist:**
+
+Example toast_messages:
+```json
+[{
+  "text": "商品已成功加入購物車",
+  "timestamp": "2026-01-12T10:30:15.123Z",
+  "visible": false
+}]
+```
+
+**You MUST start your observation with:**
+"剛才點擊『加入購物車』後，出現了成功提示「商品已成功加入購物車」（現已消失），購物車數量從 0 變成 1，商品已成功加入購物車。頁面仍顯示商品詳情頁，標題為...[continue with full page description]"
+
+**Key Points:**
+1. **Always check `cart_changes` FIRST** - this is the primary indicator of success
+2. **Cart count increase = task complete** - do NOT suggest verification
+3. **Describe cart change at START** of your observation if it exists
+4. **Mention toast message** if present (but cart change is more important)
+5. **State explicitly: "商品已成功加入購物車"** when count increases
+6. Then continue with the rest of the page description
 
 ---
 
@@ -117,52 +171,6 @@ If `viewport_info.recentAnchorClick` exists:
 
 ---
 
-## **CRITICAL: Toast Messages and Cart Changes**
-
-**When toast messages or cart changes are present, you MUST describe them FIRST and PROMINENTLY in your observation.**
-
-The environment data includes:
-- `toast_messages`: Array of temporary messages that appeared (usually success/error notifications)
-- `cart_changes`: Array of shopping cart count changes
-- `toast_summary`: Summary including total toasts, cart status, latest cart count
-
-**Example of how to describe toast messages:**
-
-If `toast_messages` contains:
-```json
-[{
-  "text": "商品已成功加入購物車",
-  "timestamp": "2026-01-12T10:30:15.123Z",
-  "visible": false
-}]
-```
-
-And `cart_changes` contains:
-```json
-[{
-  "from": 0,
-  "to": 1,
-  "timestamp": "2026-01-12T10:30:15.100Z"
-}]
-```
-
-**You MUST start your observation with:**
-"剛才的操作觸發了成功訊息「商品已成功加入購物車」（已消失），購物車數量從 0 變成 1。[then continue with the rest of the page description...]"
-
-**Key Points:**
-1. **Always check `toast_messages` and `cart_changes` FIRST**
-2. **Describe them at the START of your observation** if they exist
-3. **Explicitly state the cart count change** (from X to Y)
-4. **Mention if the toast is no longer visible** (visible: false)
-5. This helps the agent understand the **result of its last action**
-
-**Example observation structure:**
-```
-"剛才點擊『加入購物車』後，出現了綠色成功提示「✓ 已成功加入購物車」（現已消失），同時購物車圖示旁的數量徽章從『0』變成『1』。頁面仍顯示商品詳情頁，標題為...[continue with full page description]"
-```
-
----
-
 ## Special Note: Price Recognition
 
 When describing prices on the page, pay attention to these HTML attributes that indicate price types:
@@ -191,4 +199,3 @@ When describing prices on the page, pay attention to these HTML attributes that 
 **Key principle**: Always make it crystal clear which price is the ACTUAL PRICE the customer needs to pay. Start with the current price, include unit price when available (very important for comparison shopping), and then mention the original price if present.
 
 **Note**: These attributes are hints to help you describe prices accurately. You should still include ALL text as it appears, but use these attributes to clarify price types in your natural language description, with emphasis on the actual current price and unit pricing.
-```

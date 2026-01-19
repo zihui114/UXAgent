@@ -1235,6 +1235,13 @@ class WebAgentEnv:
                 parser_code = f.read()
             try:
                 content = await self.page.evaluate(parser_code)
+                # 🆕 加入這段 debug
+                if content.get("cart_changes"):
+                    self.logger.info(f"🛒 購物車變化: {content['cart_changes']}")
+                if content.get("toast_messages"):
+                    self.logger.info(f"🔔 Toast 訊息: {len(content['toast_messages'])} 則")
+                if content.get("toast_summary"):
+                    self.logger.info(f"📊 購物車狀態: {content['toast_summary']}")
             except Exception as e:
                 self.logger.error(f"Parser script failed: {e}")
                 # Fallback to basic HTML content
