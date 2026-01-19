@@ -152,42 +152,85 @@ class LLMUXAnalyzer:
                     'content': entry.get('content', '')[:300]  # 限制長度
                 })
 
-        # 解析動作序列
+        # 解析動作序列（支援新舊兩種格式）
         actions = []
+        element_info_map = {}  # 儲存元素的 class/id 資訊
         for action_str in action_trace:
             try:
                 action = json.loads(action_str)
-                actions.append(action)
+                # 新格式：包含 action 和 element_info
+                if isinstance(action, dict) and "action" in action:
+                    actual_action = action["action"]
+                    element_info = action.get("element_info", {})
+                    target_id = actual_action.get("target", "")
+                    if target_id and element_info:
+                        element_info_map[target_id] = element_info
+                    actions.append(actual_action)
+                else:
+                    # 舊格式：直接是 action
+                    actions.append(action)
             except:
                 pass
 
-        # 分析重複動作模式
+        # ===== 精確統計動作次數（防止 LLM 編造數字）=====
+
+        # 1. 統計每個 target 被點擊的次數
+        target_click_count = {}
+        for action in actions:
+            target = action.get('target', '')
+            if target:
+                target_click_count[target] = target_click_count.get(target, 0) + 1
+
+        # 2. 統計每個關鍵字出現的次數（基於 description）
+        keyword_frequency = {}
+        keyword_list = ['品牌公告', '品牌故事', '商品規格', '詳細說明', '加入購物車', '評價', '購物車', 'TOP熱賣', '產品']
+        for action in actions:
+            desc = action.get('description', '')
+            for keyword in keyword_list:
+                if keyword in desc:
+                    keyword_frequency[keyword] = keyword_frequency.get(keyword, 0) + 1
+
+        # 3. 建立動作序列摘要（每個動作的編號和描述）
+        action_summary = []
+        for i, action in enumerate(actions):
+            action_summary.append({
+                'step': i + 1,
+                'target': action.get('target', ''),
+                'description': action.get('description', ''),
+                'action_type': action.get('action', 'click')
+            })
+
+        # 4. 找出重複點擊的元素（點擊 >= 2 次的）
+        repeated_clicks = {k: v for k, v in target_click_count.items() if v >= 2}
+
+        # 5. 舊格式的 action_frequency（保持向後兼容）
         action_frequency = {}
         for action in actions:
-            # 提取 target 和 description
-            target = action.get('target', '')
             desc = action.get('description', '')
-
-            # 建立唯一鍵（基於 description 的關鍵字）
             key_words = []
             for keyword in ['品牌公告', '品牌故事', '商品規格', '詳細說明', '加入購物車', '評價']:
                 if keyword in desc:
                     key_words.append(keyword)
-
             if key_words:
                 key = '+'.join(key_words)
                 action_frequency[key] = action_frequency.get(key, 0) + 1
 
         return {
             'persona_info': persona_info,
-            'persona_text_excerpt': persona_text[:1500],  # 增加到1500字符
+            'persona_text_excerpt': persona_text[:1500],
             'total_actions': len(actions),
             'actions': actions,
-            'action_frequency': action_frequency,  # 新增：重複動作統計
-            'chinese_thoughts': chinese_thoughts,  # 移除限制，提供所有中文思考
-            'english_reflections': english_reflections[:50],  # 增加到50條
+            'action_frequency': action_frequency,
+            'element_info_map': element_info_map,
+            'chinese_thoughts': chinese_thoughts,
+            'english_reflections': english_reflections[:50],
             'total_thoughts': len(chinese_thoughts),
-            'total_reflections': len(english_reflections)
+            'total_reflections': len(english_reflections),
+            # ===== 新增：精確統計數據（防止 LLM 編造）=====
+            'target_click_count': target_click_count,      # 每個 target 的點擊次數
+            'keyword_frequency': keyword_frequency,        # 每個關鍵字的出現次數
+            'action_summary': action_summary,              # 動作序列摘要
+            'repeated_clicks': repeated_clicks,            # 重複點擊的元素
         }
 
     def _build_analysis_prompt(self, data: Dict[str, Any]) -> str:
@@ -211,8 +254,37 @@ class LLMUXAnalyzer:
 ## 動作序列（共 {data['total_actions']} 個動作）
 {json.dumps(data['actions'], ensure_ascii=False, indent=2)}
 
-## 🔥 重複動作統計（重點關注，必須準確引用）
+## 🔥🔥🔥 精確統計數據（禁止編造，只能引用以下數字）🔥🔥🔥
+
+⚠️ **嚴重警告**：以下是系統預先計算的精確數字，你**只能引用這些數字**，**絕對禁止編造或修改任何數字**！
+
+### 📊 總動作次數
+- **總共執行了 {data['total_actions']} 個動作**
+
+### 📊 每個 target 的點擊次數（精確數字）
+{json.dumps(data.get('target_click_count', {}), ensure_ascii=False, indent=2)}
+
+### 📊 關鍵字出現次數（精確數字）
+{json.dumps(data.get('keyword_frequency', {}), ensure_ascii=False, indent=2)}
+
+### 📊 重複點擊的元素（點擊 >= 2 次）
+{json.dumps(data.get('repeated_clicks', {}), ensure_ascii=False, indent=2)}
+
+### 📊 動作序列摘要（每一步的詳細記錄）
+{json.dumps(data.get('action_summary', []), ensure_ascii=False, indent=2)}
+
+### 📊 舊格式統計（向後兼容）
 {json.dumps(data['action_frequency'], ensure_ascii=False, indent=2)}
+
+## 📍 元素資訊映射（實際的 HTML class 和 id）
+以下是測試過程中互動元素的實際 HTML 資訊，**在改善建議中必須使用這些實際的 class 和 id**：
+{json.dumps(data.get('element_info_map', {}), ensure_ascii=False, indent=2)}
+
+**🚨 引用數字的規則（必須遵守）**：
+1. 當你說「點擊 X 次」時，必須從上面的統計數據中查找對應數字
+2. 如果上面沒有該數字，就說「根據動作序列，點擊了 X 次」並引用 action_summary 中的 step 編號
+3. **絕對禁止**說出上面統計中不存在的數字
+4. 如果不確定次數，使用「多次」而不是編造具體數字
 
 **分析要點**：
 - 如果某個動作重複 ≥ 3 次，可能表示**連結失效、回饋不足或使用者困惑**
@@ -286,23 +358,26 @@ class LLMUXAnalyzer:
 - 是否有連續點擊相同元素但無進展？（可能是回饋不足）
 - 是否有跳躍式導航？（可能是資訊架構問題）
 
-**🔍 從測試數據中識別頁面和元素資訊**：
-1. **從 action 序列中提取**：
-   - 查看 action 的 `description` 欄位，識別使用者點擊的元素（例如：「點擊『商品規格』tab」→ 識別為【商品規格頁籤】）
-   - 查看 action 的 `target` 欄位，記錄元素 ID（例如：target='item33' → 在建議中引用此 ID）
-   - 從 description 推測頁面名稱（例如：「進入常溫濃雞精60入商品頁」→ 【產品詳情頁】）
+**🔍 使用「元素資訊映射」中的實際 HTML class 和 id**：
 
-2. **從使用者想法中推測**：
-   - 如果使用者提到「商品規格」、「產品頁面」、「詳細說明」→ 對應【產品詳情頁】
+⚠️ **重要**：在建議中必須使用「元素資訊映射」中提供的**實際 class 和 id**，而不是猜測或使用通用名稱！
+
+1. **從「元素資訊映射」查找實際的 CSS 選擇器**：
+   - 每個 target ID（如 'item33'）都有對應的實際元素資訊
+   - 使用 `class` 欄位中的**實際 class 名稱**（例如：如果 class 是 "product-detail__title ec-product-title"，就使用 `.product-detail__title` 或 `.ec-product-title`）
+   - 使用 `id` 欄位中的**實際 id**（例如：如果 id 是 "main-product-info"，就使用 `#main-product-info`）
+   - 使用 `tag` 欄位來識別元素類型（如 `button`、`a`、`div` 等）
+   - 使用 `data_attributes` 中的 data 屬性（例如：`[data-product-id="123"]`）
+
+2. **如果元素資訊映射中沒有對應資訊**：
+   - 只使用 target ID（如 `[parser-semantic-id="item33"]`）
+   - 在建議中明確標註「需要開發者確認實際的 CSS 選擇器」
+   - **絕對不要**捏造或猜測 class 名稱
+
+3. **從 action 序列推測頁面名稱**：
+   - 查看 action 的 `description` 欄位推測頁面（例如：「進入常溫濃雞精60入商品頁」→ 【產品詳情頁】）
+   - 如果使用者提到「商品規格」、「產品頁面」→ 對應【產品詳情頁】
    - 如果使用者提到「購物車」、「結帳」→ 對應【購物車頁面】或【結帳頁面】
-   - 如果使用者提到「品牌公告」、「品牌故事」→ 對應【品牌資訊頁】
-
-3. **常見頁面與元素對應**：
-   - 產品標題 → .product-title 或 #product-name
-   - 價格區域 → .price-section 或 #price-display
-   - 加入購物車按鈕 → .add-to-cart-btn 或 #add-cart-button
-   - 商品規格 → .product-specs 或 #specifications
-   - 品牌公告 → .brand-announcement 或 #brand-info
 
 ## 步驟 5：產生可執行的改善建議
 
@@ -318,9 +393,10 @@ class LLMUXAnalyzer:
    - **範例格式**：
      * ❌ 不佳：「改善字體大小」
      * ❌ 不佳：「將網站字體大小調整為至少 14pt」
-     * ✅ 良好：「【產品詳情頁】的【產品標題區塊】(.product-title)：將字體大小從 12pt 調整為 16pt，並將行高從 18px 調整為 24px」
-     * ✅ 良好：「【產品詳情頁】的【價格顯示區域】(#price-section)：在『折扣價 NT$8,100』下方新增『✓ 此為最終結帳價，無其他隱藏費用』提示文字（字體 14pt，綠色字體 #28a745）」
-     * ✅ 良好：「【所有頁面】的【導航欄】(.navbar)：將『加入購物車』按鈕尺寸從 32×32px 增大至 48×48px，並將按鈕間距從 4px 增加至 12px」
+     * ❌ 不佳：「【產品詳情頁】的【產品標題區塊】(.product-title)：...」（使用了猜測的通用 class 名稱）
+     * ✅ 良好：「【產品詳情頁】的【產品標題區塊】（從元素資訊映射：class="ec-product-detail__title"，使用 `.ec-product-detail__title`）：將字體大小從 12pt 調整為 16pt」
+     * ✅ 良好：「【產品詳情頁】的【加入購物車按鈕】（target ID: item30，從元素資訊映射：tag="button", class="add-cart-btn primary-btn"）：將按鈕尺寸從 32×32px 增大至 48×48px」
+     * ✅ 良好：如果元素資訊映射中沒有 class 資訊：「【產品詳情頁】的【品牌公告連結】（target ID: item3，需開發者確認實際 CSS 選擇器）：修復連結失效問題」
 
    - 如果涉及資料，必須列出要顯示的內容（例如：「顯示健字號：衛署健食字第AXXXXXX號」）
    - 如果涉及技術修復，必須說明如何修復（例如：「檢查連結 href 是否正確」）
@@ -412,14 +488,17 @@ class LLMUXAnalyzer:
 **強制檢查清單（輸出前必須確認）**：
 ✅ ux_issues 陣列有至少 4 個元素？
 ✅ 每個問題都引用了至少 5 條 user_thoughts？
-✅ 重複動作次數是從 action_frequency 準確提取的？
 ✅ 有進行時間序列分析（behavioral_patterns）？
 ✅ 建議夠具體（有 UI 描述/數據內容/技術方案）？
 ✅ 每個 recommendation 都包含 implementation_difficulty 和 required_resources？
 ✅ 包含完整的 action_plan（短期/中期/長期）？
-✅ **【新增】每條 specific_actions 都明確標示了【頁面名稱】和【元素位置】？**
-✅ **【新增】每條 specific_actions 都包含具體的數值變更（例如：從 12pt 改為 16pt）？**
-✅ **【新增】如果涉及字體、按鈕、間距等視覺元素，是否提供了具體的尺寸和數值？**
+✅ **每條 specific_actions 都明確標示了【頁面名稱】和【元素位置】？**
+✅ **每條 specific_actions 都包含具體的數值變更（例如：從 12pt 改為 16pt）？**
+✅ **如果涉及字體、按鈕、間距等視覺元素，是否提供了具體的尺寸和數值？**
+✅ **【重要】CSS 選擇器是否來自「元素資訊映射」中的實際 class/id，而非猜測的通用名稱？**
+✅ **【重要】如果元素資訊映射中沒有對應資訊，是否標註了「需開發者確認實際 CSS 選擇器」？**
+✅ **🚨【最重要】所有提到的點擊次數是否都來自「精確統計數據」區塊？禁止編造數字！**
+✅ **🚨【最重要】如果說「點擊 X 次」，X 是否與 target_click_count 或 keyword_frequency 中的數字一致？**
 
 {{
   "test_metadata": {{
@@ -531,11 +610,11 @@ class LLMUXAnalyzer:
       "required_resources": "前端工程師 1 人、內容編輯 1 人、2週開發時間",
       "rationale": "對於高風險感知的謹慎型使用者，官方認證是購買決策的必要條件。缺乏認證入口導致 100% 購買放棄率。",
       "specific_actions": [
-        "【產品詳情頁】的【頁面頂部區域】(#product-header)：新增『🏅 官方認證資訊』區塊，包含：衛福部健字號（例如：衛署健食字第 AXXXXXX 號），字體大小 16pt，使用高對比色（黑底白字，對比度 7:1）",
-        "【產品詳情頁】的【認證資訊區塊】(.certification-section)：提供『查看認證證書 (PDF)』下載連結（按鈕尺寸 48×120px）和『🔗 衛福部 TFDA 資料庫查詢』外部連結（按鈕尺寸 48×180px）",
-        "【產品詳情頁】的【商品規格區域下方】(#specs-section)：新增『SGS 檢驗報告』可展開區塊，提供：胺基酸組成分析、普林含量檢測（XX mg/100ml）、微生物檢驗報告下載，區塊預設展開",
-        "【產品詳情頁】的【產品標題旁】(.product-title-badge)：加入認證徽章圖示（尺寸 32×32px，綠色勾勾圖示 + 『衛福部認證』文字，字體 12pt）",
-        "【產品詳情頁】的【所有認證相關元素】：使用顯眼的設計（高對比色、字體至少 14pt）確保使用者第一眼就能看到"
+        "【產品詳情頁】的【頁面頂部區域】（從元素資訊映射查找，若無則標註需開發者確認）：新增『🏅 官方認證資訊』區塊，包含：衛福部健字號（例如：衛署健食字第 AXXXXXX 號），字體大小 16pt，使用高對比色（黑底白字，對比度 7:1）",
+        "【產品詳情頁】的【認證資訊區塊】（target ID 對應的實際 class，如 .ec-certification-block）：提供『查看認證證書 (PDF)』下載連結（按鈕尺寸 48×120px）和『🔗 衛福部 TFDA 資料庫查詢』外部連結（按鈕尺寸 48×180px）",
+        "【產品詳情頁】的【商品規格區域下方】（從元素資訊映射：target='item33' 對應的 class）：新增『SGS 檢驗報告』可展開區塊",
+        "【產品詳情頁】的【產品標題旁】（從元素資訊映射查找實際 class，避免使用猜測的 .product-title-badge）：加入認證徽章圖示（尺寸 32×32px）",
+        "【產品詳情頁】的【所有認證相關元素】（需開發者確認實際 CSS 選擇器）：使用顯眼的設計（高對比色、字體至少 14pt）"
       ],
       "expected_impact": "謹慎型使用者轉換率從 0% 提升至 40-60%。減少客服諮詢量 30%（使用者可自助驗證）。建立長期品牌信任，提升回購率。",
       "persona_alignment": "完全符合謹慎驗證型使用者的核心需求：需要權威機構背書、可驗證的官方資訊、降低購買風險。"
@@ -717,7 +796,11 @@ class LLMUXAnalyzer:
 
 1. **至少找出 3-5 個具體問題**，不要只有一個泛化的「資訊分散」
 2. **每個問題引用 3-5 條使用者想法**，用原文引用不要改寫
-3. **從重複動作統計中提取具體次數**（例如：「點擊『品牌公告』9 次」）
+3. **🚨🚨🚨 數字準確性（最高優先級）**：
+   - **只能使用「精確統計數據」區塊中提供的數字**
+   - 當說「點擊 X 次」時，X 必須來自 `target_click_count` 或 `keyword_frequency`
+   - 如果統計中顯示「購物車: 2」，就只能說「點擊購物車 2 次」，**絕對不能**說成 5 次或其他數字
+   - 如果不確定具體次數，使用「多次」、「數次」等模糊詞，**不要編造具體數字**
 4. **建議要非常具體**（例如：「在產品頁面頂部新增...」而不是「改善資訊架構」）
 5. **嚴重程度要準確**：導致任務失敗 = CRITICAL，嚴重影響體驗 = HIGH
 6. **必須包含 action_plan**：整合所有建議到短期/中期/長期行動計劃中
@@ -725,6 +808,11 @@ class LLMUXAnalyzer:
    - 例如：「【產品詳情頁】的【產品標題區塊】(.product-title)：將字體大小從 12pt 調整為 16pt」
    - 不可以只寫：「將網站字體大小調整為至少 14pt」
    - 必須明確標示頁面、元素、具體數值
+8. **🔴🔴 CSS 選擇器必須來自「元素資訊映射」中的實際 class/id**
+   - 在「元素資訊映射」中查找對應 target ID 的 class 和 id
+   - 使用實際的 class 名稱（如 `.ec-product-detail__title`），而不是猜測的通用名稱（如 `.product-title`）
+   - 如果沒有對應資訊，標註「需開發者確認實際 CSS 選擇器」
+   - **絕對禁止**捏造或猜測 class 名稱
 
 請直接輸出 JSON，確保格式正確。
 """
