@@ -172,34 +172,65 @@ class LLMUXAnalyzer:
             except:
                 pass
 
-        # 分析重複動作模式
+        # ===== 精確統計動作次數（防止 LLM 編造數字）=====
+
+        # 1. 統計每個 target 被點擊的次數
+        target_click_count = {}
+        for action in actions:
+            target = action.get('target', '')
+            if target:
+                target_click_count[target] = target_click_count.get(target, 0) + 1
+
+        # 2. 統計每個關鍵字出現的次數（基於 description）
+        keyword_frequency = {}
+        keyword_list = ['品牌公告', '品牌故事', '商品規格', '詳細說明', '加入購物車', '評價', '購物車', 'TOP熱賣', '產品']
+        for action in actions:
+            desc = action.get('description', '')
+            for keyword in keyword_list:
+                if keyword in desc:
+                    keyword_frequency[keyword] = keyword_frequency.get(keyword, 0) + 1
+
+        # 3. 建立動作序列摘要（每個動作的編號和描述）
+        action_summary = []
+        for i, action in enumerate(actions):
+            action_summary.append({
+                'step': i + 1,
+                'target': action.get('target', ''),
+                'description': action.get('description', ''),
+                'action_type': action.get('action', 'click')
+            })
+
+        # 4. 找出重複點擊的元素（點擊 >= 2 次的）
+        repeated_clicks = {k: v for k, v in target_click_count.items() if v >= 2}
+
+        # 5. 舊格式的 action_frequency（保持向後兼容）
         action_frequency = {}
         for action in actions:
-            # 提取 target 和 description
-            target = action.get('target', '')
             desc = action.get('description', '')
-
-            # 建立唯一鍵（基於 description 的關鍵字）
             key_words = []
             for keyword in ['品牌公告', '品牌故事', '商品規格', '詳細說明', '加入購物車', '評價']:
                 if keyword in desc:
                     key_words.append(keyword)
-
             if key_words:
                 key = '+'.join(key_words)
                 action_frequency[key] = action_frequency.get(key, 0) + 1
 
         return {
             'persona_info': persona_info,
-            'persona_text_excerpt': persona_text[:1500],  # 增加到1500字符
+            'persona_text_excerpt': persona_text[:1500],
             'total_actions': len(actions),
             'actions': actions,
-            'action_frequency': action_frequency,  # 新增：重複動作統計
-            'element_info_map': element_info_map,  # 新增：元素的 class/id 資訊
-            'chinese_thoughts': chinese_thoughts,  # 移除限制，提供所有中文思考
-            'english_reflections': english_reflections[:50],  # 增加到50條
+            'action_frequency': action_frequency,
+            'element_info_map': element_info_map,
+            'chinese_thoughts': chinese_thoughts,
+            'english_reflections': english_reflections[:50],
             'total_thoughts': len(chinese_thoughts),
-            'total_reflections': len(english_reflections)
+            'total_reflections': len(english_reflections),
+            # ===== 新增：精確統計數據（防止 LLM 編造）=====
+            'target_click_count': target_click_count,      # 每個 target 的點擊次數
+            'keyword_frequency': keyword_frequency,        # 每個關鍵字的出現次數
+            'action_summary': action_summary,              # 動作序列摘要
+            'repeated_clicks': repeated_clicks,            # 重複點擊的元素
         }
 
     def _build_analysis_prompt(self, data: Dict[str, Any]) -> str:
@@ -223,12 +254,37 @@ class LLMUXAnalyzer:
 ## 動作序列（共 {data['total_actions']} 個動作）
 {json.dumps(data['actions'], ensure_ascii=False, indent=2)}
 
-## 🔥 重複動作統計（重點關注，必須準確引用）
+## 🔥🔥🔥 精確統計數據（禁止編造，只能引用以下數字）🔥🔥🔥
+
+⚠️ **嚴重警告**：以下是系統預先計算的精確數字，你**只能引用這些數字**，**絕對禁止編造或修改任何數字**！
+
+### 📊 總動作次數
+- **總共執行了 {data['total_actions']} 個動作**
+
+### 📊 每個 target 的點擊次數（精確數字）
+{json.dumps(data.get('target_click_count', {}), ensure_ascii=False, indent=2)}
+
+### 📊 關鍵字出現次數（精確數字）
+{json.dumps(data.get('keyword_frequency', {}), ensure_ascii=False, indent=2)}
+
+### 📊 重複點擊的元素（點擊 >= 2 次）
+{json.dumps(data.get('repeated_clicks', {}), ensure_ascii=False, indent=2)}
+
+### 📊 動作序列摘要（每一步的詳細記錄）
+{json.dumps(data.get('action_summary', []), ensure_ascii=False, indent=2)}
+
+### 📊 舊格式統計（向後兼容）
 {json.dumps(data['action_frequency'], ensure_ascii=False, indent=2)}
 
 ## 📍 元素資訊映射（實際的 HTML class 和 id）
 以下是測試過程中互動元素的實際 HTML 資訊，**在改善建議中必須使用這些實際的 class 和 id**：
 {json.dumps(data.get('element_info_map', {}), ensure_ascii=False, indent=2)}
+
+**🚨 引用數字的規則（必須遵守）**：
+1. 當你說「點擊 X 次」時，必須從上面的統計數據中查找對應數字
+2. 如果上面沒有該數字，就說「根據動作序列，點擊了 X 次」並引用 action_summary 中的 step 編號
+3. **絕對禁止**說出上面統計中不存在的數字
+4. 如果不確定次數，使用「多次」而不是編造具體數字
 
 **分析要點**：
 - 如果某個動作重複 ≥ 3 次，可能表示**連結失效、回饋不足或使用者困惑**
@@ -432,7 +488,6 @@ class LLMUXAnalyzer:
 **強制檢查清單（輸出前必須確認）**：
 ✅ ux_issues 陣列有至少 4 個元素？
 ✅ 每個問題都引用了至少 5 條 user_thoughts？
-✅ 重複動作次數是從 action_frequency 準確提取的？
 ✅ 有進行時間序列分析（behavioral_patterns）？
 ✅ 建議夠具體（有 UI 描述/數據內容/技術方案）？
 ✅ 每個 recommendation 都包含 implementation_difficulty 和 required_resources？
@@ -442,6 +497,8 @@ class LLMUXAnalyzer:
 ✅ **如果涉及字體、按鈕、間距等視覺元素，是否提供了具體的尺寸和數值？**
 ✅ **【重要】CSS 選擇器是否來自「元素資訊映射」中的實際 class/id，而非猜測的通用名稱？**
 ✅ **【重要】如果元素資訊映射中沒有對應資訊，是否標註了「需開發者確認實際 CSS 選擇器」？**
+✅ **🚨【最重要】所有提到的點擊次數是否都來自「精確統計數據」區塊？禁止編造數字！**
+✅ **🚨【最重要】如果說「點擊 X 次」，X 是否與 target_click_count 或 keyword_frequency 中的數字一致？**
 
 {{
   "test_metadata": {{
@@ -739,7 +796,11 @@ class LLMUXAnalyzer:
 
 1. **至少找出 3-5 個具體問題**，不要只有一個泛化的「資訊分散」
 2. **每個問題引用 3-5 條使用者想法**，用原文引用不要改寫
-3. **從重複動作統計中提取具體次數**（例如：「點擊『品牌公告』9 次」）
+3. **🚨🚨🚨 數字準確性（最高優先級）**：
+   - **只能使用「精確統計數據」區塊中提供的數字**
+   - 當說「點擊 X 次」時，X 必須來自 `target_click_count` 或 `keyword_frequency`
+   - 如果統計中顯示「購物車: 2」，就只能說「點擊購物車 2 次」，**絕對不能**說成 5 次或其他數字
+   - 如果不確定具體次數，使用「多次」、「數次」等模糊詞，**不要編造具體數字**
 4. **建議要非常具體**（例如：「在產品頁面頂部新增...」而不是「改善資訊架構」）
 5. **嚴重程度要準確**：導致任務失敗 = CRITICAL，嚴重影響體驗 = HIGH
 6. **必須包含 action_plan**：整合所有建議到短期/中期/長期行動計劃中
@@ -747,7 +808,7 @@ class LLMUXAnalyzer:
    - 例如：「【產品詳情頁】的【產品標題區塊】(.product-title)：將字體大小從 12pt 調整為 16pt」
    - 不可以只寫：「將網站字體大小調整為至少 14pt」
    - 必須明確標示頁面、元素、具體數值
-8. **🔴🔴 最重要：CSS 選擇器必須來自「元素資訊映射」中的實際 class/id**
+8. **🔴🔴 CSS 選擇器必須來自「元素資訊映射」中的實際 class/id**
    - 在「元素資訊映射」中查找對應 target ID 的 class 和 id
    - 使用實際的 class 名稱（如 `.ec-product-detail__title`），而不是猜測的通用名稱（如 `.product-title`）
    - 如果沒有對應資訊，標註「需開發者確認實際 CSS 選擇器」
