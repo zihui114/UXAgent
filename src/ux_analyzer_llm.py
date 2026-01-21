@@ -408,11 +408,11 @@ class LLMUXAnalyzer:
       "CSS變更": [
         {{
             "target_id": "itemXX",
-            "raw_dom": {
+            "raw_dom": {{
              "tag": "button",
              "class": "sale-page-btn core-btn add-to-cart-btn custom-btn cms-secondBtnBgColor cms-secondBtnTextColor cms-secondBtnBorderColor",
              "id": ""
-           },
+           }},
                 "選擇器": ".add-to-cart-btn",
                 "選擇器說明": "完整標出class名稱",
                 "屬性": "font-size",
