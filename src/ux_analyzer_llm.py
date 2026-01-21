@@ -397,34 +397,34 @@ class LLMUXAnalyzer:
     }}
   ],
   "改善建議": [
-    {
-      "優先級": "P0",
-      "標題": "強化加入購物車按鈕的可辨識性",
-      "類別": "互動回饋",
-      "理由": "使用者在點擊加入購物車後，無法立即確認是否成功加入，造成不確定感。",
+    {{
+      "優先級": "P0/P1/P2",
+      "標題": "建議標題",
+      "類別": "對應問題的類別",
+      "理由": "為什麼要這樣做",
       "具體行動": [
-        "【產品頁】的【加入購物車按鈕】（class='.add-to-cart-btn', target='item31'）：提高按鈕文字與尺寸可見度"
+        "【頁面名稱】的【元素位置】（class='.real-class', target='itemXX'）：具體變更"
       ],
       "CSS變更": [
-        {
-          "target_id": "item31",
-          "raw_dom": {
-            "tag": "button",
-            "class": "sale-page-btn core-btn add-to-cart-btn custom-btn cms-secondBtnBgColor cms-secondBtnTextColor cms-secondBtnBorderColor",
-            "id": ""
-          },
-          "選擇器": ".add-to-cart-btn",
-          "選擇器說明": "從多個 class 中選擇最具語意的行為型 class，而非樣式或 CMS class",
-          "屬性": "font-size",
-          "目前值": "14px",
-          "建議值": "16px",
-          "原因": "提升按鈕文字可讀性，降低年長與謹慎型使用者的不確定感"
-        }
+        {{
+            "target_id": "itemXX",
+            "raw_dom": {
+             "tag": "button",
+             "class": "sale-page-btn core-btn add-to-cart-btn custom-btn cms-secondBtnBgColor cms-secondBtnTextColor cms-secondBtnBorderColor",
+             "id": ""
+           },
+                "選擇器": ".add-to-cart-btn",
+                "選擇器說明": "完整標出class名稱",
+                "屬性": "font-size",
+                "目前值": "14px",
+                "建議值": "16px",
+                "原因": "提升可讀性"
+        }}
       ],
-      "預期效果": "降低加入購物車後的不確定感，減少重複點擊行為"
-    }
+      "預期效果": "量化的預期效果"
+    }}
   ]
-}
+}}
 ```
 
 **檢查清單**：
