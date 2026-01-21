@@ -94,17 +94,33 @@ Example toast_messages:
 
 **IMPORTANT: When describing cart badges in navigation:**
 
-If you see a number/badge with these indicators:
-- Attribute `parser-cart-badge="true"`
-- Class contains "cart", "round-badge", "cms-badge"
-- Numeric badge near shopping cart icon in header
+In simplified HTML, shopping cart indicators may NOT have any class names, icons, or visual badges.
 
-**Always identify it as "購物車數量" not just "數字":**
+If you observe the following structural pattern:
+- A navigation area
+- Followed by the FIRST unordered list (ul) inside or immediately after the navigation
+- That ul contains a single list item (li)
+- The li contains only a numeric text (e.g., "0", "1", "2")
 
-✅ Correct: "購物車圖示旁顯示數量徽章『1』，表示購物車內有 1 件商品。"
-❌ Wrong: "導覽列顯示數字 1。" (unclear what it means)
+You MUST interpret this number as the shopping cart count.
 
-This helps connect the cart badge to the add-to-cart action.
+You MUST describe it explicitly as "購物車數量", not as a generic number.
+
+Examples:
+✅ Correct:
+"導覽區域顯示購物車數量『1』，表示購物車內有 1 件商品。"
+
+❌ Wrong:
+"導覽列中顯示數字 1。"
+"頁面上看到一個數字 1。"
+
+This rule applies EVEN IF:
+- There is no class such as round-badge or cart-badge
+- There is no shopping cart icon
+- The number appears as plain text inside a navigation list
+
+Structural position and numeric-only content are sufficient to identify it as the shopping cart count.
+
 
 ## **CRITICAL: Viewport Changes and Anchor Navigation**
 
