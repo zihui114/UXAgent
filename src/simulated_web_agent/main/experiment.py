@@ -143,11 +143,11 @@ async def _run_for_persona_and_intent(
             with open(
                 trace_dir / "simp_html" / f"simp_html_{steps_taken}.html", "w"
             ) as f:
-                f.write(obs["html"])
+                f.write(obs["html"])#parser.py 的 cleaned HTML
             with open(
                 trace_dir / "raw_html" / f"raw_html_{steps_taken}.html", "w"
             ) as f:
-                f.write(await env.page.content())
+                f.write(await env.page.content())# 原始 HTML（完整 DOM）
 
             # Use our policy to determine the action for this step from the environment
             action = await policy.forward(env)
@@ -174,8 +174,8 @@ async def _run_for_persona_and_intent(
 
             # 建立包含元素資訊的 action 記錄
             enriched_action = {
-                "action": action_data,
-                "element_info": element_info,
+                "action": action_data, #agent 做的動作
+                "element_info": element_info, #semantic-id 對應的原始資訊
                 "step": steps_taken,
             }
             action_trace.append(json.dumps(enriched_action))
