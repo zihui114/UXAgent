@@ -309,14 +309,21 @@ class LLMUXAnalyzer:
 {json.dumps(data.get('element_info_map', {}), ensure_ascii=False, indent=2)}
 ```
 
-**如何使用**：
-1. 找到對應的 target ID（例如 "item5"）
-2. 使用其中的 `class` 欄位作為 CSS 選擇器
-3. **重要：簡化選擇器**
-   - ❌ 不好：`.sc-hImiYT.etRXNy.product-card__vertical.product-card__vertical--hover.new-product-card`
-   - ✅ 良好：`.product-card__vertical` 或 `.new-product-card`（選擇最具語意的 class）
-4. 範例：如果 "item5" 的 class 是 "btn primary-btn add-to-cart-btn"，就用 `.add-to-cart-btn`（最具體的）
-5. **絕對不要猜測或編造 class 名稱**
+ **如何使用**：
+ 1. 找到對應的 target ID（例如 "item5"）
+ 2. 使用其中的 `class` 欄位作為 CSS 選擇器
+ 3. **重要：簡化選擇器**
+@@
+ 5. **絕對不要猜測或編造 class 名稱**
++
++⚠️ **輸出規則補充（非常重要）**：
++在所有改善建議中，請同時輸出：
++- 一個「建議使用的簡化 CSS selector」（給工程師實作）
++- 以及對應的「完整原始 DOM 資訊（raw class / tag）」作為證據
++
++請注意：
++- 簡化 selector 與 raw class 必須來自同一個 target_id
++- raw class 必須完整逐字輸出，不可省略、不可重組
 
 ---
 
@@ -400,13 +407,18 @@ class LLMUXAnalyzer:
       ],
       "CSS變更": [
         {{
-          "target_id": "itemXX",
-          "選擇器": ".meaningful-class-name",
-          "選擇器說明": "從 class 中選擇最具語意的一個（不要全部列出）",
-          "屬性": "font-size",
-          "目前值": "14px",
-          "建議值": "16px",
-          "原因": "提升可讀性"
+            "target_id": "itemXX",
+        +   "raw_dom": {
+        +     "tag": "button",
+        +     "class": "sale-page-btn core-btn add-to-cart-btn custom-btn cms-secondBtnBgColor cms-secondBtnTextColor cms-secondBtnBorderColor",
+        +     "id": ""
+        +   },
+                "選擇器": ".add-to-cart-btn",
+                "選擇器說明": "從 class 中選擇最具語意的一個（不要全部列出）",
+                "屬性": "font-size",
+                "目前值": "14px",
+                "建議值": "16px",
+                "原因": "提升可讀性"
         }}
       ],
       "預期效果": "量化的預期效果"
@@ -546,6 +558,10 @@ def generate_markdown_report(analysis: Dict[str, Any], persona: PersonaProfile, 
             for idx, css_change in enumerate(rec['CSS變更'], 1):
                 target_id = css_change.get('target_id', 'N/A')
                 selector = css_change.get('選擇器', 'N/A')
+                raw_dom = css_change.get('raw_dom', {}) #顯示 raw DOM
+                raw_class = raw_dom.get('class', 'N/A')
+                raw_tag = raw_dom.get('tag', 'N/A')
+                raw_id = raw_dom.get('id', '')
                 property_name = css_change.get('屬性', 'N/A')
                 current = css_change.get('目前值', 'N/A')
                 recommended = css_change.get('建議值', 'N/A')
@@ -557,6 +573,11 @@ def generate_markdown_report(analysis: Dict[str, Any], persona: PersonaProfile, 
 
 - **Target ID**: `{target_id}`
 - **CSS 選擇器**: `{selector}`
+- **CSS 選擇器**: `{selector}`
++ **CSS 選擇器（建議）**: `{selector}`
++ **原始 DOM tag**: `{raw_tag}`
++ **原始 DOM class**: `{raw_class}`
++ **原始 DOM id**: `{raw_id}`
 - **屬性**: `{property_name}`
 - **目前值**: {current}
 - **建議值**: {recommended}
