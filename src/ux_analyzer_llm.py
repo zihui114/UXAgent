@@ -18,6 +18,74 @@ from dotenv import load_dotenv
 import openai
 
 
+# ==================== UX Guidelines ====================
+
+UX_GUIDELINES = """
+## UX 設計標準（建議依據）
+
+### 字號
+- 中文（手機）密集閱讀：16–18 pt；說明書類：17–20 px
+- 按鈕文字：> 22 px
+- 字距：1–2 pt；超過標準值 0.7 pt 以上易讀性下降
+- 行距：≥ 1.2 倍
+
+### 字體
+- 首選：無襯線體（Sans Serif）
+- 襯線體（Serif）提升閱讀理解力
+- 避免斜體（Italic）：閱讀與回憶效果差
+- 粗體：應用於關鍵字回憶，適用於標題、按鈕
+
+### 模式與顏色
+- 深色字 + 淺色底
+- 避免藍綠色作為關鍵資訊顏色
+- 關鍵資訊避免只靠顏色呈現
+- 顏色偏好順序：橘色 > 黃色 > 綠色 > 紅色 > 藍色 > 青色 > 紫色
+- 中等飽和度（31.75%–41.25%）；主色調建議橘色或黃色，飽和度約 35%
+- 背景使用明亮白色或淡暖色（高明度，但避免純白）
+- 選單使用稍低於背景的明度；按鈕使用高飽和度色彩強調
+- 嚴禁在淺色背景上使用檸檬黃等淡色系文字
+
+### 介面
+- 有用的資訊在頂部展現
+- 避免快速密集的資訊輸入
+- 避免巢狀或多層級選單
+
+### 按鈕
+- 觸控目標 ≥ 44×44 px
+- 螢幕頂部優於底部
+- 使用明顯震動或視覺回饋
+
+### 元件
+- 避免小滑桿、小開關
+- 提供隨時可呼叫的「小幫手」或說明
+
+### 圖示與線條
+- 圖示線條加粗
+- 圖示搭配文字說明
+- 避免只用 icon 無文字
+
+### 回饋
+- 使用明顯震動或視覺回饋
+- 聲音＋文字＋視覺提示並用（避免只有單一）
+- 完成任務後提供正向回饋
+
+### 認知負荷
+- 動畫放慢
+- 不自動跳轉頁面
+- 明顯顯示目前步驟（資訊「一直看得到」，減少記憶負擔）
+- 一步只做一個動作
+
+### 提示訊息
+- 清楚錯誤說明，提供「復原」與建議
+- 危險與不可逆操作要說明清楚
+- 盡可能可復原
+
+### 其他
+- 不限時操作（避免倒數計時壓力）
+- 一次就可以感覺到好處
+"""
+
+
 # ==================== Persona Profile ====================
 
 class PersonaProfile:
@@ -118,17 +186,18 @@ class LLMUXAnalyzer:
         action_trace: List[str],
         persona: PersonaProfile,
         persona_file: str = None,
-        run_dir: str = None
+        run_dir: str = None,
+        intent: str = None
     ) -> Dict[str, Any]:
         """使用 LLM 分析測試結果"""
-        
+
         # 準備數據給 LLM
         analysis_data = self._prepare_analysis_data(
-            memory_trace, action_trace, persona
+            memory_trace, action_trace, persona, intent
         )
 
         # 呼叫 LLM
-        print("🤖 正在使用 GPT-4 分析測試結果...")
+        print("🤖 正在使用 GPT-4o 分析測試結果...")
 
         try:
             response = self.client.chat.completions.create(
@@ -136,7 +205,11 @@ class LLMUXAnalyzer:
                 messages=[
                     {
                         "role": "system",
-                        "content": "你是一位資深的 UX 研究專家。請對以下測試數據進行深度分析，找出所有 UX 問題並根據實際的 HTML 標籤提供可執行的改善建議。"
+                        "content": (
+                            "你是一位資深的 UX 研究專家，專門為前端工程師提供可直接實作的介面改善建議。"
+                            "所有建議必須依據提供的 UX 設計標準，並附上具體的 CSS 選擇器與數值，"
+                            "讓工程師無需額外猜測即可執行。"
+                        )
                     },
                     {
                         "role": "user",
@@ -163,7 +236,8 @@ class LLMUXAnalyzer:
                 "run_directory": run_dir or "Unknown",
                 "analysis_timestamp": datetime.now().isoformat(),
                 "total_actions": analysis_data.get('total_actions', 0),
-                "total_thoughts": analysis_data.get('total_thoughts', 0)
+                "total_thoughts": analysis_data.get('total_thoughts', 0),
+                "intent": intent or "未指定"
             }
 
             result_with_metadata = {"test_metadata": test_metadata}
@@ -184,7 +258,8 @@ class LLMUXAnalyzer:
         self,
         memory_trace: List[Dict],
         action_trace: List[str],
-        persona: PersonaProfile
+        persona: PersonaProfile,
+        intent: str = None
     ) -> Dict[str, Any]:
         """準備給 LLM 的分析數據"""
 
@@ -249,6 +324,7 @@ class LLMUXAnalyzer:
         return {
             'persona_info': persona.to_dict(),
             'persona_text_excerpt': persona.raw_text[:1500],
+            'intent': intent or "未指定",
             'total_actions': len(actions),
             'actions': actions,
             'element_info_map': element_info_map,
@@ -262,7 +338,17 @@ class LLMUXAnalyzer:
     def _build_analysis_prompt(self, data: Dict[str, Any]) -> str:
         """構建給 LLM 的分析 prompt"""
 
-        prompt = f"""你是一位資深的 UX 研究專家。請對以下測試數據進行深度分析，找出所有 UX 問題並根據實際的 HTML 標籤提供可執行的改善建議。
+        prompt = f"""# 任務說明
+
+## 測試 Intent（任務目標）
+{data['intent']}
+
+**任務成功判定標準**：
+- ✅ 成功：使用者完整執行了 intent 所描述的所有步驟，並在指定停止點停止操作
+- ❌ 失敗：使用者未能完成 intent 的核心目標（例如未成功加入購物車、中途放棄）
+- 請根據動作序列與使用者想法來判定，不可自行推測
+
+---
 
 # Persona 資訊
 - **姓名**: {data['persona_info']['name']}
@@ -274,6 +360,10 @@ class LLMUXAnalyzer:
 
 ## Persona 特徵描述
 {data['persona_text_excerpt']}
+
+---
+
+{UX_GUIDELINES}
 
 ---
 
@@ -339,7 +429,14 @@ class LLMUXAnalyzer:
 
 # 分析要求
 
-## 步驟 1：深度分析使用者行為
+## 步驟 1：判定任務是否成功
+
+對照上方「測試 Intent」，逐步確認使用者是否完成所有關鍵步驟：
+- 檢查動作序列，確認每個 intent 子任務是否被執行
+- 檢查使用者想法，確認是否在完成前放棄
+- 給出 true/false 判斷，並說明依據（不可猜測）
+
+## 步驟 2：深度分析使用者行為
 
 逐條閱讀所有內心想法，找出：
 1. 重複出現的疑慮或困惑
@@ -347,27 +444,29 @@ class LLMUXAnalyzer:
 3. 放棄的原因（如果任務未完成）
 4. 心理變化演進
 
-## 步驟 2：識別 UX 問題
+## 步驟 3：識別 UX 問題
 
 每個問題必須包含：
 1. 具體的問題描述
-2. 引用至少 3-5 條使用者想法（完整原文）
+2. 引用至少 1-2 條使用者想法（完整原文）
 3. 從「精確統計數據」中引用點擊次數
 4. 嚴重程度判斷（CRITICAL/HIGH/MEDIUM/LOW）
+5. 對照上方 UX 設計標準，標注違反了哪一條規範
 
-## 步驟 3：產生改善建議
+## 步驟 4：產生改善建議
 
-每個建議必須包含：
-1. 優先級（P0/P1/P2）
-2. 具體行動（必須標示【頁面】和【元素位置】）
-3. CSS 變更（必須使用元素資訊映射中的真實 class/id）
+每個建議必須：
+1. 對應到 UX 設計標準中的具體規範（標注條目）
+2. 標示優先級（P0/P1/P2）
+3. 標示【頁面】和【元素位置】
+4. 提供可直接給前端工程師執行的 CSS 變更（使用元素資訊映射的真實 class/id）
 
 **CSS 建議格式範例**：
 ```
 【產品頁】的 button.add-to-cart (target='item12', class='add-to-cart')：
-- 將 font-size 從 14px 改為 16px
-- 將 padding 從 8px 改為 12px
-- 將 background-color 改為更高對比的顏色
+- 將 font-size 從 14px 改為 22px（依據：按鈕文字 > 22px 標準）
+- 將 min-width/min-height 改為 44px（依據：觸控目標 ≥ 44×44 px）
+- 將 background-color 改為高飽和橘色（依據：按鈕使用高飽和度色彩強調）
 ```
 
 ---
@@ -378,14 +477,16 @@ class LLMUXAnalyzer:
 {{
   "執行摘要": {{
     "任務完成": true/false,
-    "完成原因": "簡短說明",
+    "Intent": "（原始 intent 文字）",
+    "完成依據": "說明動作序列中哪些步驟對應 intent，以及最終是否達成",
     "關鍵洞察": "最重要的發現"
   }},
   "UX問題": [
     {{
       "標題": "問題標題",
       "嚴重程度": "CRITICAL/HIGH/MEDIUM/LOW",
-      "類別": "導航/資訊呈現/互動回饋/信任建立/其他",
+      "類別": "導航/資訊呈現/互動回饋/信任建立/字體排版/顏色對比/按鈕設計/認知負荷/其他",
+      "違反UX標準": "對照 UX 設計標準，說明違反了哪一條（例如：按鈕觸控目標 < 44×44 px）",
       "描述": "具體的問題描述",
       "使用者想法": [
         "使用者想法原文1",
@@ -401,7 +502,8 @@ class LLMUXAnalyzer:
       "優先級": "P0/P1/P2",
       "標題": "建議標題",
       "類別": "對應問題的類別",
-      "理由": "為什麼要這樣做",
+      "對應UX標準": "本建議對應的 UX 設計標準條目（例如：觸控目標 ≥ 44×44 px）",
+      "理由": "為什麼要這樣做，以及符合哪條 UX 標準",
       "具體行動": [
         "【頁面名稱】的【元素位置】（class='.real-class', target='itemXX'）：具體變更"
       ],
@@ -417,8 +519,9 @@ class LLMUXAnalyzer:
                 "選擇器說明": "完整標出class名稱",
                 "屬性": "font-size",
                 "目前值": "14px",
-                "建議值": "16px",
-                "原因": "提升可讀性"
+                "建議值": "22px",
+                "對應UX標準": "按鈕文字 > 22px",
+                "原因": "提升按鈕可讀性，符合 UX 標準"
         }}
       ],
       "預期效果": "量化的預期效果"
@@ -428,9 +531,12 @@ class LLMUXAnalyzer:
 ```
 
 **檢查清單**：
+✅ 任務完成判定來自動作序列比對 intent，有明確依據？
 ✅ 所有點擊次數來自精確統計數據？
 ✅ CSS 選擇器來自元素資訊映射的真實 class？
 ✅ 每個問題都引用了 3+ 條使用者想法？
+✅ 每個 UX 問題都標注違反的 UX 設計標準？
+✅ 每個建議都標注對應的 UX 設計標準條目？
 ✅ 建議夠具體（有實際的 CSS 屬性和數值）？
 
 請直接輸出 JSON。
@@ -470,14 +576,16 @@ def generate_markdown_report(analysis: Dict[str, Any], persona: PersonaProfile, 
 | **分析時間** | {test_metadata.get('analysis_timestamp', datetime.now().isoformat())} |
 | **總操作次數** | {test_metadata.get('total_actions', 'N/A')} |
 | **總思考次數** | {test_metadata.get('total_thoughts', 'N/A')} |
+| **測試 Intent** | {test_metadata.get('intent', 'N/A')} |
 
 ---
 
 ## 📊 執行摘要
 
 ### 任務完成狀態
+- **Intent**: {analysis.get('執行摘要', {}).get('Intent', 'N/A')}
 - **完成**: {'✅ 是' if analysis.get('執行摘要', {}).get('任務完成') else '❌ 否'}
-- **原因**: {analysis.get('執行摘要', {}).get('完成原因', 'N/A')}
+- **完成依據**: {analysis.get('執行摘要', {}).get('完成依據', 'N/A')}
 
 ### 關鍵洞察
 > {analysis.get('執行摘要', {}).get('關鍵洞察', 'N/A')}
@@ -501,6 +609,7 @@ def generate_markdown_report(analysis: Dict[str, Any], persona: PersonaProfile, 
 
 - **嚴重程度**: {issue.get('嚴重程度', 'N/A')}
 - **類別**: {issue.get('類別', 'N/A')}
+- **違反 UX 標準**: {issue.get('違反UX標準', 'N/A')}
 
 **描述**:
 {issue.get('描述', 'N/A')}
@@ -543,6 +652,7 @@ def generate_markdown_report(analysis: Dict[str, Any], persona: PersonaProfile, 
 
 - **優先級**: {rec.get('優先級', 'N/A')}
 - **類別**: {rec.get('類別', 'N/A')}
+- **對應 UX 標準**: {rec.get('對應UX標準', 'N/A')}
 
 **理由**:
 {rec.get('理由', 'N/A')}
@@ -566,21 +676,21 @@ def generate_markdown_report(analysis: Dict[str, Any], persona: PersonaProfile, 
                 current = css_change.get('目前值', 'N/A')
                 recommended = css_change.get('建議值', 'N/A')
                 reason = css_change.get('原因', 'N/A')
-                
+                ux_standard = css_change.get('對應UX標準', 'N/A')
+
                 report += f"""
 <details>
 <summary><strong>變更 {idx}</strong>: <code>{property_name}</code> ({target_id})</summary>
 
 - **Target ID**: `{target_id}`
-- **CSS 選擇器**: `{selector}`
-- **CSS 選擇器**: `{selector}`
-+ **CSS 選擇器（建議）**: `{selector}`
-+ **原始 DOM tag**: `{raw_tag}`
-+ **原始 DOM class**: `{raw_class}`
-+ **原始 DOM id**: `{raw_id}`
+- **CSS 選擇器（建議）**: `{selector}`
+- **原始 DOM tag**: `{raw_tag}`
+- **原始 DOM class**: `{raw_class}`
+- **原始 DOM id**: `{raw_id}`
 - **屬性**: `{property_name}`
 - **目前值**: {current}
 - **建議值**: {recommended}
+- **對應 UX 標準**: {ux_standard}
 - **原因**: {reason}
 
 **使用方式**:
@@ -617,6 +727,7 @@ def main():
     parser = argparse.ArgumentParser(description='UX 分析器 - 純 LLM 深度分析')
     parser.add_argument('--run-dir', required=True, help='測試結果目錄')
     parser.add_argument('--persona', required=True, help='Persona 檔案路徑')
+    parser.add_argument('--intent', help='測試任務目標描述（用於判定任務成功與否）')
     parser.add_argument('--api-key', help='OpenAI API key（或在 .env 中設定）')
     parser.add_argument('--output', help='輸出報告路徑')
 
@@ -641,6 +752,8 @@ def main():
     print(f"📊 開始 LLM 深度分析...")
     print(f"   測試目錄: {run_dir}")
     print(f"   Persona: {persona_file}")
+    if args.intent:
+        print(f"   Intent: {args.intent[:80]}{'...' if len(args.intent) > 80 else ''}")
 
     # 讀取數據
     with open(memory_trace_file, 'r', encoding='utf-8') as f:
@@ -667,7 +780,8 @@ def main():
             action_trace=action_trace,
             persona=persona,
             persona_file=persona_file.name,
-            run_dir=run_dir.name
+            run_dir=run_dir.name,
+            intent=args.intent
         )
     except Exception as e:
         print(f"\n❌ 分析失敗: {e}")
