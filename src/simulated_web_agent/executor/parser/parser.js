@@ -2,7 +2,7 @@
  *  DOM "stripper" — keeps empty controls **and** guarantees unique
  *  parser-semantic-id values by appending numeric suffixes
  * ========================================================================= */
-// parser.py
+
 const parse = () => {
   /* ---------- globals --------------------------------------------------- */
   const BLACKLISTED_TAGS = new Set([
@@ -310,6 +310,21 @@ const parse = () => {
       clone.setAttribute("parser-price-type", "sale");
     }
 
+    // 檢測購物車徽章
+    if (
+      classList.includes("round-badge") ||
+      classList.includes("cart-badge") ||
+      classList.includes("cart-count") ||
+      classList.includes("cms-badge") ||
+      classList.includes("shopping-cart-count") ||
+      (original.hasAttribute("data-ng-bind") &&
+        original.getAttribute("data-ng-bind").includes("CartCount"))
+    ) {
+      clone.setAttribute("parser-cart-badge", "true");
+      const count = parseInt(original.textContent) || 0;
+      clone.setAttribute("parser-cart-count", count);
+    }
+
     // Don't treat pointer-events: none as disabled
     // Overlay containers use pointer-events: none, but child elements override it
     const isDisabled = original.disabled || original.hasAttribute("disabled");
@@ -514,43 +529,13 @@ const parse = () => {
     }
   }
 
-  // ========== 建立 semantic-id 到原始元素資訊的映射 ==========
-  const elementInfoMap = {};
-  document.querySelectorAll('[parser-semantic-id]').forEach((el) => {
-    const semanticId = el.getAttribute('parser-semantic-id');
-    elementInfoMap[semanticId] = {
-      class: el.className || '',
-      id: el.id || '',
-      tag: el.tagName.toLowerCase(),
-      // 記錄元素的 data-* 屬性（常用於 CSS 選擇器）
-      dataAttributes: Array.from(el.attributes)
-        .filter(attr => attr.name.startsWith('data-'))
-        .reduce((acc, attr) => {
-          acc[attr.name] = attr.value;
-          return acc;
-        }, {}),
-    };
-  });
-
   // ========== 回傳 ==========
 
   return {
     html: result.outerHTML,
-    // 元素資訊映射，包含原始 class、id 等
-    element_info_map: elementInfoMap,
     clickable_elements: Array.from(
       result.querySelectorAll('[parser-clickable="true"]')
-    ).map((el) => {
-      const semanticId = el.getAttribute("parser-semantic-id");
-      const info = elementInfoMap[semanticId] || {};
-      return {
-        semantic_id: semanticId,
-        class: info.class || '',
-        id: info.id || '',
-        tag: info.tag || el.tagName.toLowerCase(),
-        data_attributes: info.dataAttributes || {},
-      };
-    }),
+    ).map((el) => el.getAttribute("parser-semantic-id")),
     hoverable_elements: Array.from(
       result.querySelectorAll('[parser-maybe-hoverable="true"]')
     ).map((el) => el.getAttribute("parser-semantic-id")),
@@ -580,7 +565,7 @@ const parse = () => {
       selectedValues: Array.from(el.selectedOptions).map((opt) => opt.value),
     })),
     toast_messages: toastInfo.messages,
-    cart_changes: toastInfo.cartChanges,//是一個array
+    cart_changes: toastInfo.cartChanges,
     toast_summary: toastInfo.summary,
     viewport_info: viewportInfo,
   };
