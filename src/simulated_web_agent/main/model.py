@@ -165,14 +165,18 @@ class AgentPolicy(BasePolicy):
             )
         else:
             await self.agent.perceive(observation["html"], cart_changes=observation.get("cart_changes", []))
-        if self.slow_loop_task is None:
-            self.slow_loop_task = asyncio.create_task(self.slow_loop())
+        
+        # 停用 Slow Loop
+        # if self.slow_loop_task is None:
+        #     self.slow_loop_task = asyncio.create_task(self.slow_loop())
+        
         # if self.agent.memory.timestamp != 0:
         #     await self.agent.feedback(observation)
         # await self.agent.perceive(observation)
         # await self.agent.reflect()  # parallel with wonder
         # await self.agent.wonder()
         # await asyncio.gather(self.agent.reflect(), self.agent.wonder())
+        await self.agent.memory.update()
         await self.agent.plan()
         action = await self.agent.act(observation)
         # pickle.dump(

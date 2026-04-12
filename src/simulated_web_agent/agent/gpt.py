@@ -22,6 +22,10 @@ from litellm.router import Router
 
 from . import context
 
+# 設定 OpenAI API Key (寫死在程式碼中)
+import os
+os.environ["OPENAI_API_KEY"] = "api_key_here"  # 替換成你的 OpenAI API Key
+
 provider = "openai"  # "openai" or "aws" or "anthropic"
 
 prompt_dir = Path(__file__).parent.absolute() / "shop_prompts"
