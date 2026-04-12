@@ -24,7 +24,7 @@ from . import context
 
 # 設定 OpenAI API Key (寫死在程式碼中)
 import os
-os.environ["OPENAI_API_KEY"] = "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"  # 替換成你的 OpenAI API Key
+os.environ["OPENAI_API_KEY"] = "api_key_here"  # 替換成你的 OpenAI API Key
 
 provider = "openai"  # "openai" or "aws" or "anthropic"
 
