@@ -535,10 +535,35 @@ const parse = () => {
     html: result.outerHTML,
     clickable_elements: Array.from(
       result.querySelectorAll('[parser-clickable="true"]')
-    ).map((el) => el.getAttribute("parser-semantic-id")),
+    ).map((el) => ({
+      semantic_id: el.getAttribute("parser-semantic-id"),
+      class: el.className || "",
+      id: el.id || "",
+      tag: el.tagName.toLowerCase(),
+      data_attributes: Object.fromEntries(
+        Array.from(el.attributes)
+          .filter((a) => a.name.startsWith("data-") && !a.name.startsWith("data-parser") && a.name !== "data-ng-href")
+          .map((a) => [a.name, a.value])
+      ),
+    })),
     hoverable_elements: Array.from(
       result.querySelectorAll('[parser-maybe-hoverable="true"]')
     ).map((el) => el.getAttribute("parser-semantic-id")),
+    element_info_map: Object.fromEntries(
+      Array.from(result.querySelectorAll('[parser-semantic-id]')).map((el) => [
+        el.getAttribute("parser-semantic-id"),
+        {
+          class: el.className || "",
+          id: el.id || "",
+          tag: el.tagName.toLowerCase(),
+          dataAttributes: Object.fromEntries(
+            Array.from(el.attributes)
+              .filter((a) => a.name.startsWith("data-") && !a.name.startsWith("data-parser"))
+              .map((a) => [a.name, a.value])
+          ),
+        },
+      ])
+    ),
     input_elements: Array.from(
       result.querySelectorAll(
         "input[parser-semantic-id], textarea[parser-semantic-id], [contenteditable][parser-semantic-id]"

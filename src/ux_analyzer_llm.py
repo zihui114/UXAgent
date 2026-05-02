@@ -14,6 +14,7 @@ import argparse
 from pathlib import Path
 from typing import Dict, List, Any
 from datetime import datetime
+from collections import defaultdict
 from dotenv import load_dotenv
 import openai
 
@@ -84,6 +85,48 @@ UX_GUIDELINES = """
 - 不限時操作（避免倒數計時壓力）
 - 一次就可以感覺到好處
 """
+
+
+# ==================== Guidelines Loader ====================
+
+def load_guidelines_from_excel(excel_path: str) -> str:
+    """從 Excel 讀取 UX 設計規範，轉換為結構化文字"""
+    try:
+        import openpyxl
+    except ImportError:
+        print("⚠️ 找不到 openpyxl，請安裝：pip install openpyxl，改用內建規範")
+        return UX_GUIDELINES
+
+    wb = openpyxl.load_workbook(excel_path)
+    ws = wb['規範']
+
+    structure = defaultdict(lambda: defaultdict(list))
+    current_cat = None
+    current_topic = None
+
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        cat, topic, detail, source, note, confirmed = row[0], row[1], row[2], row[3], row[4], row[5]
+        if cat:
+            current_cat = cat
+        if topic:
+            current_topic = topic
+        if detail and confirmed == '✅' and current_cat and current_topic:
+            entry = str(detail).strip()
+            if note:
+                entry += f"（{str(note).strip()}）"
+            structure[current_cat][current_topic].append(entry)
+
+    lines = ["## UX 設計標準（年長者 UX 與 UI 設計規範指南）\n"]
+    for cat, topics in structure.items():
+        lines.append(f"\n### {cat}")
+        for topic, details in topics.items():
+            lines.append(f"\n#### {topic}")
+            for d in details:
+                lines.append(f"- {d}")
+
+    result = "\n".join(lines)
+    print(f"📋 已從 Excel 載入 {sum(len(v) for topics in structure.values() for v in topics.values())} 條 UX 規範")
+    return result
 
 
 # ==================== Persona Profile ====================
@@ -187,17 +230,21 @@ class LLMUXAnalyzer:
         persona: PersonaProfile,
         persona_file: str = None,
         run_dir: str = None,
-        intent: str = None
+        intent: str = None,
+        guidelines: str = None
     ) -> Dict[str, Any]:
         """使用 LLM 分析測試結果"""
 
-        # 準備數據給 LLM
+        # Layer 1：資料前處理
         analysis_data = self._prepare_analysis_data(
             memory_trace, action_trace, persona, intent
         )
 
-        # 呼叫 LLM
-        print("🤖 正在使用 GPT-4o 分析測試結果...")
+        # Layer 2：行為事件抽取
+        ux_events = self._extract_ux_events(analysis_data)
+
+        # Layer 3：規範對照推理
+        print("🤖 Layer 3：規範對照推理中...")
 
         try:
             response = self.client.chat.completions.create(
@@ -213,7 +260,7 @@ class LLMUXAnalyzer:
                     },
                     {
                         "role": "user",
-                        "content": self._build_analysis_prompt(analysis_data)
+                        "content": self._build_analysis_prompt(analysis_data, ux_events=ux_events, guidelines=guidelines)
                     }
                 ],
                 temperature=0.1,
@@ -335,8 +382,108 @@ class LLMUXAnalyzer:
             'repeated_clicks': repeated_clicks,
         }
 
-    def _build_analysis_prompt(self, data: Dict[str, Any]) -> str:
-        """構建給 LLM 的分析 prompt"""
+    def _build_event_extraction_prompt(self, data: Dict[str, Any]) -> str:
+        """Layer 2：建構事件抽取 prompt"""
+
+        has_cognitive = data['total_thoughts'] > 0
+
+        event_types = """\
+- **NavigationIssue**：來回跳頁、路徑中斷、進入非預期頁面、找不到返回或下一步
+- **DecisionIssue**：商品規格混淆、無法快速比較、價格／促銷文案理解困難
+- **InteractionIssue**：重複點擊、不確定是否成功加入購物車、缺乏操作回饋
+- **ReadabilityIssue**：資訊太密、關鍵資訊不突出、文字理解負擔高"""
+
+        if has_cognitive:
+            event_types += "\n- **CognitiveBurdenIssue**：reflection 中出現「怕選錯」「看不懂」「資訊太多」「需要想一下」，或 thought 中出現反覆確認與自我修正"
+
+        cognitive_section = ""
+        if has_cognitive:
+            cognitive_section = f"""
+## 使用者內心想法（{data['total_thoughts']} 條）
+```json
+{json.dumps(data['chinese_thoughts'], ensure_ascii=False, indent=2)}
+```"""
+        else:
+            cognitive_section = "\n## 使用者內心想法\n（此次為單回圈測試，無認知資料）"
+
+        return f"""你是 UX 行為分析師。請從以下測試資料中，抽取所有可觀察到的 UX 問題事件。
+
+## Persona 背景
+{data['persona_text_excerpt'][:500]}
+
+## 動作序列
+```json
+{json.dumps(data.get('action_summary', []), ensure_ascii=False, indent=2)}
+```
+
+## 重複點擊統計
+```json
+{json.dumps(data.get('repeated_clicks', {}), ensure_ascii=False, indent=2)}
+```
+{cognitive_section}
+
+---
+
+## 可抽取的事件類型
+{event_types}
+
+## 輸出格式（JSON）
+
+```json
+{{
+  "has_cognitive_data": {str(has_cognitive).lower()},
+  "total_events": 數字,
+  "events": [
+    {{
+      "type": "NavigationIssue|DecisionIssue|InteractionIssue|ReadabilityIssue|CognitiveBurdenIssue",
+      "title": "簡短事件標題（10 字以內）",
+      "description": "具體描述此 UX 問題的發生情境",
+      "action_evidence": ["Step X: 引用動作序列原文", "Step Y: 引用動作序列原文"],
+      "thought_evidence": ["使用者想法原文（無認知資料時為空陣列）"],
+      "severity": "HIGH|MEDIUM|LOW",
+      "affected_steps": [步驟數字]
+    }}
+  ]
+}}
+```
+
+規則：
+- 每個事件的 action_evidence 必須直接引用動作序列原文
+- CognitiveBurdenIssue 只能在 has_cognitive_data 為 true 時出現
+- 不可編造未在資料中出現的事件
+- 直接輸出 JSON"""
+
+    def _extract_ux_events(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Layer 2：呼叫 LLM 抽取結構化 UX 事件"""
+        has_cognitive = data['total_thoughts'] > 0
+        print(f"🔍 Layer 2：抽取 UX 行為事件（{'含認知資料' if has_cognitive else '僅行為資料，自動降級'}）...")
+
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "你是 UX 行為分析師，專門從使用者測試資料中抽取結構化的 UX 問題事件。請嚴格依據提供的資料，不可推測或編造。"
+                    },
+                    {
+                        "role": "user",
+                        "content": self._build_event_extraction_prompt(data)
+                    }
+                ],
+                temperature=0.1,
+                max_completion_tokens=4000,
+                response_format={"type": "json_object"}
+            )
+            result = self._parse_llm_response(response.choices[0].message.content)
+            print(f"   ✅ 抽取到 {result.get('total_events', 0)} 個事件")
+            return result
+        except Exception as e:
+            print(f"   ⚠️ Layer 2 失敗，跳過事件抽取：{e}")
+            return {"has_cognitive_data": has_cognitive, "total_events": 0, "events": []}
+
+    def _build_analysis_prompt(self, data: Dict[str, Any], ux_events: Dict[str, Any] = None, guidelines: str = None) -> str:
+        """構建給 LLM 的分析 prompt（Layer 3）"""
 
         prompt = f"""# 任務說明
 
@@ -363,67 +510,42 @@ class LLMUXAnalyzer:
 
 ---
 
-{UX_GUIDELINES}
+{guidelines if guidelines is not None else UX_GUIDELINES}
 
 ---
 
 # 測試數據
 
-## 🔥 精確統計數據（只能引用這些數字，禁止編造）
+## 📋 Layer 2 結構化 UX 事件（共 {len((ux_events or {}).get('events', []))} 個）
 
-### 總動作次數
-**{data['total_actions']} 個動作**
+> 以下事件由 Layer 2 從 action trace 與 memory trace 中抽取，已標注類型與嚴重程度。
+> {'⚠️ 此次為單回圈測試，無認知資料，CognitiveBurdenIssue 類型不適用。' if not (ux_events or {}).get('has_cognitive_data', True) else '✅ 含認知資料（雙回圈），所有事件類型均適用。'}
 
-### 每個 target 的點擊次數
 ```json
-{json.dumps(data.get('target_click_count', {}), ensure_ascii=False, indent=2)}
+{json.dumps((ux_events or {}).get('events', []), ensure_ascii=False, indent=2)}
 ```
 
-### 重複點擊的元素（點擊 >= 2 次）
+---
+
+## 🔢 量化統計（CSS 建議時引用用）
+
+- 總動作次數：**{data['total_actions']} 個**
+- 重複點擊元素：
 ```json
 {json.dumps(data.get('repeated_clicks', {}), ensure_ascii=False, indent=2)}
-```
-
-### 動作序列摘要
-```json
-{json.dumps(data.get('action_summary', [])[:30], ensure_ascii=False, indent=2)}
 ```
 
 ---
 
 ## 📍 元素資訊映射（真實的 HTML class/id）
 
-⚠️ **這是最重要的資料！** 以下是真實的 HTML 元素資訊，在建議中必須使用這些真實的 class 和 id：
+⚠️ **建議的 CSS selector 必須來自此處，不可編造：**
 
 ```json
 {json.dumps(data.get('element_info_map', {}), ensure_ascii=False, indent=2)}
 ```
 
- **如何使用**：
- 1. 找到對應的 target ID（例如 "item5"）
- 2. 使用其中的 `class` 欄位作為 CSS 選擇器
- 3. **重要：簡化選擇器**
-@@
- 5. **絕對不要猜測或編造 class 名稱**
-+
-+⚠️ **輸出規則補充（非常重要）**：
-+在所有改善建議中，請同時輸出：
-+- 一個「建議使用的簡化 CSS selector」（給工程師實作）
-+- 以及對應的「完整原始 DOM 資訊（raw class / tag）」作為證據
-+
-+請注意：
-+- 簡化 selector 與 raw class 必須來自同一個 target_id
-+- raw class 必須完整逐字輸出，不可省略、不可重組
-
----
-
-## 💭 使用者內心想法（最重要的數據！）
-
-共 {data['total_thoughts']} 條想法：
-
-```json
-{json.dumps(data['chinese_thoughts'], ensure_ascii=False, indent=2)}
-```
+使用方式：找到對應 target ID → 取出 `class` → 簡化為最具代表性的一個 class 作為選擇器，並同時輸出完整 raw class 作為證據。
 
 ---
 
@@ -431,34 +553,23 @@ class LLMUXAnalyzer:
 
 ## 步驟 1：判定任務是否成功
 
-對照上方「測試 Intent」，逐步確認使用者是否完成所有關鍵步驟：
-- 檢查動作序列，確認每個 intent 子任務是否被執行
-- 檢查使用者想法，確認是否在完成前放棄
+對照上方「測試 Intent」與 Layer 2 事件，確認：
+- 所有 intent 子步驟是否都在事件中有對應的 action_evidence
 - 給出 true/false 判斷，並說明依據（不可猜測）
 
-## 步驟 2：深度分析使用者行為
+## 步驟 2：將每個 UX 事件對應到規範
 
-逐條閱讀所有內心想法，找出：
-1. 重複出現的疑慮或困惑
-2. 未被滿足的需求
-3. 放棄的原因（如果任務未完成）
-4. 心理變化演進
+針對 Layer 2 的每一個事件：
+1. 從上方 UX 設計標準中，找出最直接對應的規範條目
+2. 說明「這個事件的哪個行為」違反了「哪條規範的哪個細項」
+3. 引用事件的 action_evidence 或 thought_evidence 作為佐證
 
-## 步驟 3：識別 UX 問題
-
-每個問題必須包含：
-1. 具體的問題描述
-2. 引用至少 1-2 條使用者想法（完整原文）
-3. 從「精確統計數據」中引用點擊次數
-4. 嚴重程度判斷（CRITICAL/HIGH/MEDIUM/LOW）
-5. 對照上方 UX 設計標準，標注違反了哪一條規範
-
-## 步驟 4：產生改善建議
+## 步驟 3：產生改善建議
 
 每個建議必須：
-1. 對應到 UX 設計標準中的具體規範（標注條目）
-2. 標示優先級（P0/P1/P2）
-3. 標示【頁面】和【元素位置】
+1. 明確來自某個 Layer 2 事件（標注事件 title）
+2. 對應到 UX 設計標準的具體規範條目
+3. 標示優先級（P0/P1/P2）與頁面、元素位置
 4. 提供可直接給前端工程師執行的 CSS 變更（使用元素資訊映射的真實 class/id）
 
 **CSS 建議格式範例**：
@@ -484,23 +595,22 @@ class LLMUXAnalyzer:
   "UX問題": [
     {{
       "標題": "問題標題",
+      "來源事件": "對應 Layer 2 事件的 title",
       "嚴重程度": "CRITICAL/HIGH/MEDIUM/LOW",
-      "類別": "導航/資訊呈現/互動回饋/信任建立/字體排版/顏色對比/按鈕設計/認知負荷/其他",
+      "類別": "NavigationIssue/DecisionIssue/InteractionIssue/ReadabilityIssue/CognitiveBurdenIssue",
       "違反UX標準": "對照 UX 設計標準，說明違反了哪一條（例如：按鈕觸控目標 < 44×44 px）",
       "描述": "具體的問題描述",
-      "使用者想法": [
-        "使用者想法原文1",
-        "使用者想法原文2",
-        "使用者想法原文3"
-      ],
+      "行為證據": ["來自 Layer 2 events 的 action_evidence 原文"],
+      "認知證據": ["來自 Layer 2 events 的 thought_evidence 原文（單回圈留空陣列）"],
       "影響": "此問題對使用者體驗的影響",
-      "證據": "從精確統計引用：點擊 target='itemXX' 共 X 次"
+      "量化證據": "從重複點擊統計引用：點擊 target='itemXX' 共 X 次"
     }}
   ],
   "改善建議": [
     {{
       "優先級": "P0/P1/P2",
       "標題": "建議標題",
+      "來源事件": "對應 Layer 2 事件的 title",
       "類別": "對應問題的類別",
       "對應UX標準": "本建議對應的 UX 設計標準條目（例如：觸控目標 ≥ 44×44 px）",
       "理由": "為什麼要這樣做，以及符合哪條 UX 標準",
@@ -531,12 +641,12 @@ class LLMUXAnalyzer:
 ```
 
 **檢查清單**：
-✅ 任務完成判定來自動作序列比對 intent，有明確依據？
-✅ 所有點擊次數來自精確統計數據？
+✅ 任務完成判定來自 Layer 2 事件的 action_evidence，有明確依據？
+✅ 每個 UX 問題都標注了對應的 Layer 2 來源事件（來源事件欄位）？
+✅ 每個 UX 問題都標注違反的 UX 設計標準條目？
+✅ 每個改善建議都能追溯到某個 Layer 2 事件？
+✅ 量化證據來自重複點擊統計，不可編造？
 ✅ CSS 選擇器來自元素資訊映射的真實 class？
-✅ 每個問題都引用了 3+ 條使用者想法？
-✅ 每個 UX 問題都標注違反的 UX 設計標準？
-✅ 每個建議都標注對應的 UX 設計標準條目？
 ✅ 建議夠具體（有實際的 CSS 屬性和數值）？
 
 請直接輸出 JSON。
@@ -614,17 +724,23 @@ def generate_markdown_report(analysis: Dict[str, Any], persona: PersonaProfile, 
 **描述**:
 {issue.get('描述', 'N/A')}
 
-**使用者內心想法**:
+**行為證據**:
 """
-        for thought in issue.get('使用者想法', []):
-            report += f'> "{thought}"\n\n'
+        for evidence in issue.get('行為證據', []):
+            report += f'> "{evidence}"\n\n'
+
+        cognitive = issue.get('認知證據', [])
+        if cognitive:
+            report += "\n**認知證據（內心想法）**:\n"
+            for thought in cognitive:
+                report += f'> "{thought}"\n\n'
 
         report += f"""
 **影響**:
 {issue.get('影響', 'N/A')}
 
-**證據**:
-{issue.get('證據', 'N/A')}
+**量化證據**:
+{issue.get('量化證據', 'N/A')}
 
 ---
 """
@@ -728,6 +844,7 @@ def main():
     parser.add_argument('--run-dir', required=True, help='測試結果目錄')
     parser.add_argument('--persona', required=True, help='Persona 檔案路徑')
     parser.add_argument('--intent', help='測試任務目標描述（用於判定任務成功與否）')
+    parser.add_argument('--guidelines', help='UX 設計規範 Excel 檔案路徑（.xlsx），不提供則使用內建規範')
     parser.add_argument('--api-key', help='OpenAI API key（或在 .env 中設定）')
     parser.add_argument('--output', help='輸出報告路徑')
 
@@ -749,9 +866,22 @@ def main():
         print(f"❌ 找不到 persona 檔案: {persona_file}")
         return
 
+    # 載入 UX 設計規範
+    guidelines = None
+    if args.guidelines:
+        guidelines_path = Path(args.guidelines)
+        if not guidelines_path.exists():
+            print(f"❌ 找不到規範檔案: {guidelines_path}")
+            return
+        guidelines = load_guidelines_from_excel(str(guidelines_path))
+    else:
+        print("📋 未指定 --guidelines，使用內建 UX 規範")
+
     print(f"📊 開始 LLM 深度分析...")
     print(f"   測試目錄: {run_dir}")
     print(f"   Persona: {persona_file}")
+    if args.guidelines:
+        print(f"   規範來源: {args.guidelines}")
     if args.intent:
         print(f"   Intent: {args.intent[:80]}{'...' if len(args.intent) > 80 else ''}")
 
@@ -781,7 +911,8 @@ def main():
             persona=persona,
             persona_file=persona_file.name,
             run_dir=run_dir.name,
-            intent=args.intent
+            intent=args.intent,
+            guidelines=guidelines
         )
     except Exception as e:
         print(f"\n❌ 分析失敗: {e}")
