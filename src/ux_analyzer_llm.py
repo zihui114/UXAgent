@@ -253,9 +253,11 @@ class LLMUXAnalyzer:
                     {
                         "role": "system",
                         "content": (
-                            "你是一位資深的 UX 研究專家，專門為前端工程師提供可直接實作的介面改善建議。"
-                            "所有建議必須依據提供的 UX 設計標準，並附上具體的 CSS 選擇器與數值，"
-                            "讓工程師無需額外猜測即可執行。"
+                            "你是一位資深的 UX 研究專家，專門協助前端工程師理解介面問題並指引改善方向。"
+                            "你的建議應聚焦在「改動方向與範圍」而非具體 CSS 數值，"
+                            "因為實際改動往往涉及更上層的結構、模板或後端資料調整，單一 CSS 規則無法完整描述。"
+                            "所有建議必須引用提供的 UX 設計標準中的具體條目，並用 class 或 id 標示影響的元素位置。"
+                            "每個 UX 問題都必須附上改善方向；若 UX 設計標準中確實沒有對應規範，請明確標注。"
                         )
                     },
                     {
@@ -557,28 +559,34 @@ class LLMUXAnalyzer:
 - 所有 intent 子步驟是否都在事件中有對應的 action_evidence
 - 給出 true/false 判斷，並說明依據（不可猜測）
 
-## 步驟 2：將每個 UX 事件對應到規範
+## 步驟 2：將每個 UX 事件對應到規範，並附上改善方向
 
 針對 Layer 2 的每一個事件：
 1. 從上方 UX 設計標準中，找出最直接對應的規範條目
 2. 說明「這個事件的哪個行為」違反了「哪條規範的哪個細項」
 3. 引用事件的 action_evidence 或 thought_evidence 作為佐證
+4. **每個問題都必須給出 `改善方向`**：
+   - 若 UX 設計標準有對應規範 → 根據規範說明改善的方向
+   - 若 UX 設計標準沒有對應規範 → `改善方向` 設為 null，並在 `改善方向備注` 中說明「UX 設計標準中無對應規範」
 
-## 步驟 3：產生改善建議
+## 步驟 3：產生改善建議（方向性指引，非具體 CSS）
 
 每個建議必須：
-1. 明確來自某個 Layer 2 事件（標注事件 title）
-2. 對應到 UX 設計標準的具體規範條目
+1. 明確來自某個 Layer 2 事件（標注來源問題標題）
+2. 引用 UX 設計標準的具體條目作為依據
 3. 標示優先級（P0/P1/P2）與頁面、元素位置
-4. 提供可直接給前端工程師執行的 CSS 變更（使用元素資訊映射的真實 class/id）
+4. 用自然語言描述「改動方向」，讓工程師知道要往哪個方向改，不需要給出精確 CSS 數值
 
-**CSS 建議格式範例**：
-```
-【產品頁】的 button.add-to-cart (target='item12', class='add-to-cart')：
-- 將 font-size 從 14px 改為 22px（依據：按鈕文字 > 22px 標準）
-- 將 min-width/min-height 改為 44px（依據：觸控目標 ≥ 44×44 px）
-- 將 background-color 改為高飽和橘色（依據：按鈕使用高飽和度色彩強調）
-```
+**改動方向寫作原則**：
+- ✅ 好的方向：「在商品卡片中加入蛋白質等關鍵特徵標籤，讓使用者在列表頁即可篩選，不須點入商品頁才能確認」
+- ✅ 好的方向：「加大加入購物車按鈕的可點擊區域，並在點擊後提供明確的視覺/文字回饋（如彈窗或 toast 訊息）」
+- ❌ 避免：`.product-card {{ content: 增加說明文字 }}` ← CSS 無法這樣改
+- ❌ 避免：只改一個 CSS 屬性值，忽略實際上需要更動結構或後端資料的情形
+
+**必須附上**：
+- 影響的元素（class 或 id，從元素資訊映射取得真實值）
+- 對應的 UX 設計標準條目
+- 工程師備注（說明此改動可能的範圍：只改 CSS、需改 HTML 結構、或涉及後端資料）
 
 ---
 
@@ -603,38 +611,31 @@ class LLMUXAnalyzer:
       "行為證據": ["來自 Layer 2 events 的 action_evidence 原文"],
       "認知證據": ["來自 Layer 2 events 的 thought_evidence 原文（單回圈留空陣列）"],
       "影響": "此問題對使用者體驗的影響",
-      "量化證據": "從重複點擊統計引用：點擊 target='itemXX' 共 X 次"
+      "量化證據": "從重複點擊統計引用：點擊 target='itemXX' 共 X 次",
+      "改善方向": "根據 UX 設計標準給出的改善方向說明；若規範中無對應條目則設為 null",
+      "改善方向備注": "（選填）若改善方向為 null，說明原因；若有改善方向則可省略此欄"
     }}
   ],
   "改善建議": [
     {{
       "優先級": "P0/P1/P2",
       "標題": "建議標題",
-      "來源事件": "對應 Layer 2 事件的 title",
+      "來源問題": "對應的 UX 問題標題",
       "類別": "對應問題的類別",
-      "對應UX標準": "本建議對應的 UX 設計標準條目（例如：觸控目標 ≥ 44×44 px）",
+      "對應UX標準": "引用 UX 設計標準的具體條目文字（例如：觸控目標 ≥ 44×44 px）",
       "理由": "為什麼要這樣做，以及符合哪條 UX 標準",
-      "具體行動": [
-        "【頁面名稱】的【元素位置】（class='.real-class', target='itemXX'）：具體變更"
-      ],
-      "CSS變更": [
+      "改動方向": "用自然語言描述改動方向，說明要改什麼、往什麼方向改，讓工程師知道範圍與目標，不需要精確 CSS 數值",
+      "影響元素": [
         {{
-            "target_id": "itemXX",
-            "raw_dom": {{
-             "tag": "button",
-             "class": "sale-page-btn core-btn add-to-cart-btn custom-btn cms-secondBtnBgColor cms-secondBtnTextColor cms-secondBtnBorderColor",
-             "id": ""
-           }},
-                "選擇器": ".add-to-cart-btn",
-                "選擇器說明": "完整標出class名稱",
-                "屬性": "font-size",
-                "目前值": "14px",
-                "建議值": "22px",
-                "對應UX標準": "按鈕文字 > 22px",
-                "原因": "提升按鈕可讀性，符合 UX 標準"
+          "說明": "此元素在頁面上的位置與角色",
+          "tag": "button",
+          "class": "來自元素資訊映射的真實 class（最具代表性的一個）",
+          "id": "來自元素資訊映射的真實 id（若有）",
+          "target_id": "itemXX"
         }}
       ],
-      "預期效果": "量化的預期效果"
+      "工程師備注": "說明此改動的實際範圍：例如『僅需調整 CSS』、『需修改 HTML 模板結構』、『涉及後端資料欄位新增』等，避免工程師低估改動規模",
+      "預期效果": "此改動預期帶來的使用者體驗改善"
     }}
   ]
 }}
@@ -644,10 +645,12 @@ class LLMUXAnalyzer:
 ✅ 任務完成判定來自 Layer 2 事件的 action_evidence，有明確依據？
 ✅ 每個 UX 問題都標注了對應的 Layer 2 來源事件（來源事件欄位）？
 ✅ 每個 UX 問題都標注違反的 UX 設計標準條目？
-✅ 每個改善建議都能追溯到某個 Layer 2 事件？
+✅ 每個 UX 問題都有「改善方向」？（若 UX 設計標準無對應則標注備注）
+✅ 每個改善建議都能追溯到某個 UX 問題（來源問題欄位）？
 ✅ 量化證據來自重複點擊統計，不可編造？
-✅ CSS 選擇器來自元素資訊映射的真實 class？
-✅ 建議夠具體（有實際的 CSS 屬性和數值）？
+✅ 影響元素的 class/id 來自元素資訊映射的真實值？
+✅ 改動方向是自然語言描述，而非錯誤的 CSS 語法？
+✅ 工程師備注說明了改動的實際範圍（CSS / HTML 結構 / 後端）？
 
 請直接輸出 JSON。
 """
@@ -735,6 +738,17 @@ def generate_markdown_report(analysis: Dict[str, Any], persona: PersonaProfile, 
             for thought in cognitive:
                 report += f'> "{thought}"\n\n'
 
+        improvement = issue.get('改善方向')
+        improvement_note = issue.get('改善方向備注', '')
+        report += "\n**改善方向**:\n"
+        if improvement:
+            report += f"{improvement}\n"
+        else:
+            report += f"⚠️ UX 設計標準中無對應規範"
+            if improvement_note:
+                report += f"（{improvement_note}）"
+            report += "\n"
+
         report += f"""
 **影響**:
 {issue.get('影響', 'N/A')}
@@ -773,52 +787,22 @@ def generate_markdown_report(analysis: Dict[str, Any], persona: PersonaProfile, 
 **理由**:
 {rec.get('理由', 'N/A')}
 
-**具體行動**:
+**改動方向**:
+{rec.get('改動方向', 'N/A')}
+
+**影響元素**:
 """
-        for action in rec.get('具體行動', []):
-            report += f"- {action}\n"
+        for elem in rec.get('影響元素', []):
+            tag = elem.get('tag', '')
+            cls = elem.get('class', '')
+            eid = elem.get('id', '')
+            target_id = elem.get('target_id', '')
+            desc = elem.get('說明', '')
+            report += f"- {desc}\n"
 
-        # CSS 變更清單
-        if rec.get('CSS變更'):
-            report += "\n**CSS 變更明細**:\n\n"
-            for idx, css_change in enumerate(rec['CSS變更'], 1):
-                target_id = css_change.get('target_id', 'N/A')
-                selector = css_change.get('選擇器', 'N/A')
-                raw_dom = css_change.get('raw_dom', {}) #顯示 raw DOM
-                raw_class = raw_dom.get('class', 'N/A')
-                raw_tag = raw_dom.get('tag', 'N/A')
-                raw_id = raw_dom.get('id', '')
-                property_name = css_change.get('屬性', 'N/A')
-                current = css_change.get('目前值', 'N/A')
-                recommended = css_change.get('建議值', 'N/A')
-                reason = css_change.get('原因', 'N/A')
-                ux_standard = css_change.get('對應UX標準', 'N/A')
-
-                report += f"""
-<details>
-<summary><strong>變更 {idx}</strong>: <code>{property_name}</code> ({target_id})</summary>
-
-- **Target ID**: `{target_id}`
-- **CSS 選擇器（建議）**: `{selector}`
-- **原始 DOM tag**: `{raw_tag}`
-- **原始 DOM class**: `{raw_class}`
-- **原始 DOM id**: `{raw_id}`
-- **屬性**: `{property_name}`
-- **目前值**: {current}
-- **建議值**: {recommended}
-- **對應 UX 標準**: {ux_standard}
-- **原因**: {reason}
-
-**使用方式**:
-```css
-{selector} {{
-  {property_name}: {recommended};
-}}
-```
-
-</details>
-
-"""
+        engineer_note = rec.get('工程師備注', '')
+        if engineer_note:
+            report += f"\n> **工程師備注**: {engineer_note}\n"
 
         report += f"""
 **預期效果**:
@@ -846,7 +830,8 @@ def main():
     parser.add_argument('--intent', help='測試任務目標描述（用於判定任務成功與否）')
     parser.add_argument('--guidelines', help='UX 設計規範 Excel 檔案路徑（.xlsx），不提供則使用內建規範')
     parser.add_argument('--api-key', help='OpenAI API key（或在 .env 中設定）')
-    parser.add_argument('--output', help='輸出報告路徑')
+    parser.add_argument('--output', help='JSON 輸出路徑（預設：run_dir/ux_analysis_llm.json）')
+    parser.add_argument('--md-output', help='Markdown 輸出路徑（預設：run_dir/ux_analysis_llm.md）')
 
     args = parser.parse_args()
 
@@ -934,7 +919,7 @@ def main():
     print(f"✅ JSON 分析結果已儲存: {json_output}")
 
     # 產生 Markdown 報告
-    md_output = str(run_dir / 'ux_analysis_llm.md')
+    md_output = args.md_output or str(run_dir / 'ux_analysis_llm.md')
     report = generate_markdown_report(analysis_result, persona, run_dir)
     Path(md_output).write_text(report, encoding='utf-8')
     print(f"✅ Markdown 報告已產生: {md_output}")
