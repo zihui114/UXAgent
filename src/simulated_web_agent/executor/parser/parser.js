@@ -201,7 +201,9 @@ const parse = () => {
     while (node) {
       if (
         node.tagName.toLowerCase() === "span" &&
-        !node.hasAttribute("parser-semantic-id")
+        !node.hasAttribute("parser-semantic-id") &&
+        !node.hasAttribute("parser-price-type") &&
+        !node.hasAttribute("parser-strikethrough")
       ) {
         spansToUnwrap.push(node);
       }
